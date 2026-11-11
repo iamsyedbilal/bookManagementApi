@@ -1,0 +1,29 @@
+import express from 'express';
+import cookieParser from 'cookie-parser';
+import cors from 'cors';
+// Routes Imports
+import healthRoute from './routes/healthRoute.js';
+import bookRoute from './routes/bookRoute.js';
+
+const app = express();
+
+app.use(
+    cors({
+        allowedHeaders: ['Content-Type', 'Authorization'],
+        origin: '*',
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    })
+);
+app.use(
+    express.json({
+        limit: '1mb',
+    })
+);
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(cookieParser());
+
+// Routes
+app.use('/api/health', healthRoute);
+app.use('/api/books', bookRoute);
+
+export default app;
