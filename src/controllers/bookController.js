@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Book from '../models/bookModel.js';
+import ApiError from '../utils/ApiError.js';
 
 // Fetch All Books
 export const fetchAllBooks = async (req, res) => {

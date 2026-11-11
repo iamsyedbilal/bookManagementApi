@@ -1,6 +1,7 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
+import { errorHandlerMiddleware } from './middlewares/errorMiddleware.js';
 // Routes Imports
 import healthRoute from './routes/healthRoute.js';
 import bookRoute from './routes/bookRoute.js';
@@ -25,5 +26,7 @@ app.use(cookieParser());
 // Routes
 app.use('/api/health', healthRoute);
 app.use('/api/books', bookRoute);
+
+app.use(errorHandlerMiddleware);
 
 export default app;
