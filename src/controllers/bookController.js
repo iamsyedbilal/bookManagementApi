@@ -50,3 +50,29 @@ export const fetchBookById = async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 };
+
+// Update Book Controller
+export const updateBookController = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ error: 'Invalid Book ID' });
+        }
+
+        const updatedBook = await Book.findByIdAndUpdate(id, req.body, { new: true, runValidators: true });
+
+        if (!updatedBook) {
+            return res.status(404).json({ message: 'No book found' });
+        }
+
+        return res.status(200).json(updatedBook);
+    } catch (error) {
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ error: 'Validation failed', details: error.message });
+        }
+
+        console.error('Error updating book:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
