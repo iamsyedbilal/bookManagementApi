@@ -40,4 +40,28 @@ describe('Invalid Input Validation', () => {
         expect(response.status).toBe(400);
         expect(response.body.error).toBe('Genre is required');
     });
+
+    it('should return 400 if description is under 100 characters', async () => {
+        const response = await request(app)
+            .post('/api/books/create')
+            .send({
+                ...validBook,
+                description: 'Too short description',
+            });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toBe('Description must be at least 100 characters');
+    });
+
+    it('should return 400 if description exceeds 500 characters', async () => {
+        const response = await request(app)
+            .post('/api/books/create')
+            .send({
+                ...validBook,
+                description: 'A'.repeat(501),
+            });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toBe('Description cannot exceed 500 characters');
+    });
 });
