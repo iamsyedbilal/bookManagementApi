@@ -88,4 +88,26 @@ describe('Invalid Input Validation', () => {
         expect(response.status).toBe(400);
         expect(response.body.error).toBe('Publication year cannot be in the future');
     });
+
+    it('should return 400 if number types receive invalid strings', async () => {
+        const response = await request(app)
+            .post('/api/books/create')
+            .send({
+                ...validBook,
+                publicationYear: '1925',
+            });
+
+        expect(response.status).toBe(400);
+    });
+
+    it('should return 400 if boolean types receive invalid strings', async () => {
+        const response = await request(app)
+            .post('/api/books/create')
+            .send({
+                ...validBook,
+                availability: 'true',
+            });
+
+        expect(response.status).toBe(400);
+    });
 });
