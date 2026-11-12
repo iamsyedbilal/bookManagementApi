@@ -1,23 +1,17 @@
 import mongoose from 'mongoose';
 
-// Title
-// Author
-// ISBN
-// Description
-// Publication year
-// Genre
-// Availability
-
 const bookSchema = new mongoose.Schema(
     {
         title: {
             type: String,
             required: [true, 'Book title is required'],
+            minlength: [3, 'Book title must be at least 3 characters long'],
             trim: true,
         },
         author: {
             type: String,
             required: [true, 'Author name is required'],
+            minlength: [3, 'Author name must be at least 3 characters long'],
             trim: true,
         },
         ISBN: {
@@ -27,14 +21,15 @@ const bookSchema = new mongoose.Schema(
         },
         description: {
             type: String,
-            minlength: [100, 'Minimum 100 words is required'],
-            maxlength: [500, 'Maximum 500 words is allowed'],
             required: [true, 'Description is required'],
+            minlength: [100, 'Description must be at least 100 characters'],
+            maxlength: [500, 'Description cannot exceed 500 characters'],
+            trim: true,
         },
         publicationYear: {
             type: Number,
             required: [true, 'Publication year is required'],
-            min: [1900, 'Publication year must be after 1900'],
+            min: [1900, 'Invalid publication year'],
             max: [new Date().getFullYear(), 'Publication year cannot be in the future'],
         },
         genre: {
