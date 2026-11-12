@@ -64,4 +64,28 @@ describe('Invalid Input Validation', () => {
         expect(response.status).toBe(400);
         expect(response.body.error).toBe('Description cannot exceed 500 characters');
     });
+
+    it('should return 400 if publicationYear is before 1900', async () => {
+        const response = await request(app)
+            .post('/api/books/create')
+            .send({
+                ...validBook,
+                publicationYear: 1899,
+            });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toBe('Invalid publication year');
+    });
+
+    it('should return 400 if publicationYear is in the future', async () => {
+        const response = await request(app)
+            .post('/api/books/create')
+            .send({
+                ...validBook,
+                publicationYear: new Date().getFullYear() + 1,
+            });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toBe('Publication year cannot be in the future');
+    });
 });
