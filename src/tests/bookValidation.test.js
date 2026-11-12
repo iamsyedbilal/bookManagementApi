@@ -29,4 +29,15 @@ describe('Invalid Input Validation', () => {
         expect(response.status).toBe(400);
         expect(response.body.error).toBe('Book title must be at least 3 characters long');
     });
+
+    it('should return 400 when genre is not in the allowed enum', async () => {
+        const response = await request(app)
+            .post('/api/books/create')
+            .send({
+                ...validBook,
+                genre: 'Technology',
+            });
+        expect(response.status).toBe(400);
+        expect(response.body.error).toBe('Genre is required');
+    });
 });
