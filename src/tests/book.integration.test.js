@@ -109,4 +109,19 @@ describe('Book API integration', () => {
 
         expect(response.status).toBe(400);
     });
+
+    it('updates a book successfully with PATCH', async () => {
+        const createdBook = await Book.create(validBook);
+        const updatedTitle = 'The Great Gatsby — Updated';
+
+        const response = await request(app).patch(`/api/books/${createdBook._id}`).send({ title: updatedTitle });
+
+        expect(response.status).toBe(200);
+        expect(response.body.title).toBe(updatedTitle);
+        expect(response.body.author).toBe(validBook.author);
+
+        const savedBook = await Book.findById(createdBook._id);
+        expect(savedBook.title).toBe(updatedTitle);
+        expect(savedBook.author).toBe(validBook.author);
+    });
 });
