@@ -41,7 +41,7 @@ export const updateBookController = async (req, res) => {
         throw new ApiError(400, 'Invalid Book ID');
     }
 
-    const updatedBook = await Book.findByIdAndUpdate(id, req.body, { new: true, runValidators: true });
+    const updatedBook = await Book.findByIdAndUpdate(id, req.body, { returnDocument: 'after', runValidators: true });
 
     if (!updatedBook) {
         throw new ApiError(404, 'Book not found');
