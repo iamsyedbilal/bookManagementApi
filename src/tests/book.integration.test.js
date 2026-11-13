@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { Types } from 'mongoose';
 import { connect, clearDatabase, disconnect } from './helpers/testDatabase.js';
 import Book from '../models/bookModel.js';
 import request from 'supertest';
@@ -66,5 +67,46 @@ describe('Book API integration', () => {
         expect(Array.isArray(response.body)).toBe(true);
         expect(response.body).toHaveLength(2);
         expect(response.body.map((book) => book.title)).toEqual(expect.arrayContaining(['Book One', 'Book Two']));
+    });
+
+    it('returns an empty array when there are no books', async () => {
+        const response = await request(app).get('/api/books');
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual([]);
+    });
+
+    it('fetches a single book successfully', async () => {
+        const createdBook = await Book.create(validBook);
+
+        const response = await request(app).get(`/api/books/${createdBook._id}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.title).toBe(createdBook.title);
+        expect(response.body.author).toBe(createdBook.author);
+        expect(response.body._id).toBe(createdBook._id.toString());
+    });
+
+    it('returns 404 when the book does not exist', async () => {
+        const nonExistingId = new Types.ObjectId();
+
+        const response = await request(app).get(`/api/books/${nonExistingId}`);
+
+        expect(response.status).toBe(404);
+    });
+
+    it('returns 404 when fetching a book after it has been deleted', async () => {
+        const createdBook = await Book.create(validBook);
+        await Book.findByIdAndDelete(createdBook._id);
+
+        const response = await request(app).get(`/api/books/${createdBook._id}`);
+
+        expect(response.status).toBe(404);
+    });
+
+    it('returns 400 when the book ID is invalid', async () => {
+        const response = await request(app).get('/api/books/invalid-id');
+
+        expect(response.status).toBe(400);
     });
 });
