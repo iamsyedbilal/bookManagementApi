@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createBookSchema } from '../validations/bookValidation.js';
+import { createBookSchema, updateBookSchema } from '../validations/bookValidation.js';
 
 const validBook = {
     title: 'The Great Gatsby',
@@ -203,5 +203,69 @@ describe('createBookSchema - Boundary & Behavior Tests', () => {
             availability: 'true',
         });
         expect(result.success).toBe(false);
+    });
+});
+
+describe('updateBookSchema', () => {
+    it('Update only title', () => {
+        const result = updateBookSchema.safeParse({
+            title: 'ABC',
+        });
+        expect(result.success).toBe(true);
+    });
+
+    it('Update only availability to false', () => {
+        const result = updateBookSchema.safeParse({
+            availability: false,
+        });
+        expect(result.success).toBe(true);
+    });
+
+    it('Update multiple fields', () => {
+        const result = updateBookSchema.safeParse({
+            title: 'ABC',
+            author: 'John Fitzgerald',
+        });
+        expect(result.success).toBe(true);
+    });
+
+    it('Empty object', () => {
+        const result = updateBookSchema.safeParse({});
+        expect(result.success).toBe(false);
+    });
+
+    it('Invalid title', () => {
+        const result = updateBookSchema.safeParse({
+            title: 'Ab',
+        });
+        expect(result.success).toBe(false);
+    });
+
+    it('Unknown field such as price', () => {
+        const result = updateBookSchema.safeParse({
+            price: 56,
+        });
+        expect(result.success).toBe(false);
+    });
+
+    it('Publication year as string', () => {
+        const result = updateBookSchema.safeParse({
+            publicationYear: '1988',
+        });
+        expect(result.success).toBe(false);
+    });
+
+    it('Description with 99 characters', () => {
+        const result = updateBookSchema.safeParse({
+            description: 'A'.repeat(99),
+        });
+        expect(result.success).toBe(false);
+    });
+
+    it('Description with 100 characters', () => {
+        const result = updateBookSchema.safeParse({
+            description: 'A'.repeat(100),
+        });
+        expect(result.success).toBe(true);
     });
 });
