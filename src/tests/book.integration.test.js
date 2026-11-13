@@ -124,4 +124,26 @@ describe('Book API integration', () => {
         expect(savedBook.title).toBe(updatedTitle);
         expect(savedBook.author).toBe(validBook.author);
     });
+
+    it('returns 404 when PATCHing a book that does not exist', async () => {
+        const nonExistingId = new Types.ObjectId();
+
+        const response = await request(app).patch(`/api/books/${nonExistingId}`).send({ title: 'Updated title' });
+
+        expect(response.status).toBe(404);
+    });
+
+    it('returns 400 when PATCHing with an invalid book ID', async () => {
+        const response = await request(app).patch('/api/books/invalid-id').send({ title: 'Updated title' });
+
+        expect(response.status).toBe(400);
+    });
+
+    it('returns 400 when PATCHing with an empty update', async () => {
+        const createdBook = await Book.create(validBook);
+
+        const response = await request(app).patch(`/api/books/${createdBook._id}`).send({});
+
+        expect(response.status).toBe(400);
+    });
 });
