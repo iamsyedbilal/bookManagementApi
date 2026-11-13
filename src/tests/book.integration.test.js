@@ -46,4 +46,25 @@ describe('Book API integration', () => {
         expect(savedBook).not.toBeNull();
         expect(savedBook.title).toBe(validBook.title);
     });
+
+    it('fetches all books successfully', async () => {
+        await Book.insertMany([
+            { ...validBook, title: 'Book One', ISBN: '978-0743273565' },
+            {
+                ...validBook,
+                title: 'Book Two',
+                ISBN: '978-0451524935',
+                author: 'George Orwell',
+                publicationYear: 1949,
+                genre: 'Fiction',
+            },
+        ]);
+
+        const response = await request(app).get('/api/books');
+
+        expect(response.status).toBe(200);
+        expect(Array.isArray(response.body)).toBe(true);
+        expect(response.body).toHaveLength(2);
+        expect(response.body.map((book) => book.title)).toEqual(expect.arrayContaining(['Book One', 'Book Two']));
+    });
 });
