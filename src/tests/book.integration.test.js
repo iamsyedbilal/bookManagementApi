@@ -146,4 +146,27 @@ describe('Book API integration', () => {
 
         expect(response.status).toBe(400);
     });
+
+    it('deletes a book successfully', async () => {
+        const createdBook = await Book.create(validBook);
+
+        const response = await request(app).delete(`/api/books/${createdBook._id}`);
+
+        expect(response.status).toBe(200);
+        expect(await Book.findById(createdBook._id)).toBeNull();
+    });
+
+    it('returns 404 when deleting a book that does not exist', async () => {
+        const nonExistingId = new Types.ObjectId();
+
+        const response = await request(app).delete(`/api/books/${nonExistingId}`);
+
+        expect(response.status).toBe(404);
+    });
+
+    it('returns 400 when deleting with an invalid book ID', async () => {
+        const response = await request(app).delete('/api/books/invalid-id');
+
+        expect(response.status).toBe(400);
+    });
 });
