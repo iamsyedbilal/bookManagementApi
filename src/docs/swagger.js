@@ -20,13 +20,13 @@ const swaggerOptions = {
             },
         ],
     },
-    apis: ['./src/routes/*.js'],
+    apis: ['./src/docs/*Docs.js'],
 };
 
 const swaggerSpec = swaggerJSDoc(swaggerOptions);
 
 router.get('/json', (req, res) => {
-    res.send(swaggerSpec);
+    res.json(swaggerSpec);
 });
 
 router.use('/', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
