@@ -15,6 +15,8 @@
  *               type: array
  *               items:
  *                 $ref: '#/components/schemas/Book'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  */
 
 /**
@@ -40,9 +42,11 @@
  *             schema:
  *               $ref: '#/components/schemas/Book'
  *       400:
- *         description: Invalid book ID.
+ *         $ref: '#/components/responses/BadRequest'
  *       404:
- *         description: Book not found.
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  *
  *   patch:
  *     summary: Update a book
@@ -70,9 +74,11 @@
  *             schema:
  *               $ref: '#/components/schemas/Book'
  *       400:
- *         description: Invalid ID or request data.
+ *         $ref: '#/components/responses/BadRequest'
  *       404:
- *         description: Book not found.
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  *
  *   delete:
  *     summary: Delete a book
@@ -98,9 +104,11 @@
  *                   type: string
  *                   example: Book deleted successfully
  *       400:
- *         description: Invalid book ID.
+ *         $ref: '#/components/responses/BadRequest'
  *       404:
- *         description: Book not found.
+ *         $ref: '#/components/responses/NotFound'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  *
  * /api/books/create:
  *   post:
@@ -122,10 +130,51 @@
  *             schema:
  *               $ref: '#/components/schemas/Book'
  *       400:
- *         description: Validation error.
+ *         $ref: '#/components/responses/BadRequest'
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  *
  * components:
+ *   responses:
+ *     BadRequest:
+ *       description: The request contains invalid data or an invalid ID.
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ErrorResponse'
+ *
+ *     NotFound:
+ *       description: The requested book was not found.
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ErrorResponse'
+ *
+ *     InternalServerError:
+ *       description: An unexpected server error occurred.
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ErrorResponse'
+ *
  *   schemas:
+ *     ErrorResponse:
+ *       type: object
+ *       required:
+ *         - success
+ *         - statusCode
+ *         - message
+ *       properties:
+ *         success:
+ *           type: boolean
+ *           example: false
+ *         statusCode:
+ *           type: integer
+ *           example: 400
+ *         message:
+ *           type: string
+ *           example: Invalid ID format
+ *
  *     Book:
  *       type: object
  *       required:
