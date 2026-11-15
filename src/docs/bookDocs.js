@@ -9,6 +9,12 @@
  *     responses:
  *       200:
  *         description: Books retrieved successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Book'
  */
 
 /**
@@ -29,6 +35,10 @@
  *     responses:
  *       200:
  *         description: Book retrieved successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Book'
  *       400:
  *         description: Invalid book ID.
  *       404:
@@ -55,6 +65,10 @@
  *     responses:
  *       200:
  *         description: Book updated successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Book'
  *       400:
  *         description: Invalid ID or request data.
  *       404:
@@ -75,6 +89,14 @@
  *     responses:
  *       200:
  *         description: Book deleted successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Book deleted successfully
  *       400:
  *         description: Invalid book ID.
  *       404:
@@ -95,11 +117,72 @@
  *     responses:
  *       201:
  *         description: Book created successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Book'
  *       400:
  *         description: Validation error.
  *
  * components:
  *   schemas:
+ *     Book:
+ *       type: object
+ *       required:
+ *         - _id
+ *         - title
+ *         - author
+ *         - ISBN
+ *         - description
+ *         - publicationYear
+ *         - genre
+ *         - availability
+ *         - createdAt
+ *         - updatedAt
+ *       properties:
+ *         _id:
+ *           type: string
+ *           example: '673abc123456789012345678'
+ *         title:
+ *           type: string
+ *           minLength: 3
+ *           example: The Great Gatsby
+ *         author:
+ *           type: string
+ *           minLength: 3
+ *           example: F. Scott Fitzgerald
+ *         ISBN:
+ *           type: string
+ *           example: '978-0743273565'
+ *         description:
+ *           type: string
+ *           minLength: 100
+ *           maxLength: 500
+ *         publicationYear:
+ *           type: number
+ *           minimum: 1900
+ *         genre:
+ *           type: string
+ *           enum:
+ *             - Fiction
+ *             - Non-Fiction
+ *             - Science Fiction
+ *             - Fantasy
+ *             - Mystery
+ *             - Romance
+ *             - Biography
+ *             - History
+ *             - Self-Help
+ *         availability:
+ *           type: boolean
+ *           example: true
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
+ *
  *     CreateBook:
  *       type: object
  *       required:
@@ -112,10 +195,11 @@
  *       properties:
  *         title:
  *           type: string
+ *           minLength: 3
  *           example: The Great Gatsby
  *         author:
  *           type: string
- *           example: F. Scott Fitzgerald
+ *           minLength: 3
  *         ISBN:
  *           type: string
  *           example: '978-0743273565'
@@ -124,8 +208,8 @@
  *           minLength: 100
  *           maxLength: 500
  *         publicationYear:
- *           type: integer
- *           example: 1925
+ *           type: number
+ *           minimum: 1900
  *         genre:
  *           type: string
  *           enum:
@@ -160,7 +244,8 @@
  *           minLength: 100
  *           maxLength: 500
  *         publicationYear:
- *           type: integer
+ *           type: number
+ *           minimum: 1900
  *         genre:
  *           type: string
  *           enum:
