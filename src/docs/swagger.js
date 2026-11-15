@@ -1,6 +1,7 @@
 import express from 'express';
 import swaggerJSDoc from 'swagger-jsdoc';
 import { config } from '../config/config.js';
+import swaggerUI from 'swagger-ui-express';
 
 const router = express.Router();
 
@@ -21,3 +22,13 @@ const swaggerOptions = {
     },
     apis: ['./src/routes/*.js'],
 };
+
+const swaggerSpec = swaggerJSDoc(swaggerOptions);
+
+router.get('/json', (req, res) => {
+    res.send(swaggerSpec);
+});
+
+router.use('/', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
+
+export default router;
