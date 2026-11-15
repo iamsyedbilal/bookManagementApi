@@ -7,6 +7,8 @@ const _config = {
     databaseUrl: process.env.MONGO_CONNECTION_STRING,
     dbName: process.env.DB_NAME,
     env: process.env.NODE_ENV,
+    accessToken: process.env.ACCESS_TOKEN_SECRET,
+    refreshToken: process.env.REFRESH_TOKEN_SECRET,
 };
 
 export const config = Object.freeze(_config);

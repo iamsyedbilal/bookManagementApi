@@ -13,3 +13,12 @@ export const registerUserSchema = z.strictObject({
         .pipe(z.email({ error: 'Please enter a valid email' })),
     password: z.string({ error: 'Password is required' }).min(8, 'Password must be at least 8 characters long'),
 });
+
+export const loginUserSchema = z.strictObject({
+    email: z
+        .string({ error: 'Email is required' })
+        .trim()
+        .toLowerCase()
+        .pipe(z.email({ error: 'Please enter a valid email' })),
+    password: z.string({ error: 'Password is required' }).min(8, 'Password must be at least 8 characters long'),
+});
