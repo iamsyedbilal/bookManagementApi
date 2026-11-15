@@ -10,6 +10,14 @@ export const errorHandlerMiddleware = (err, req, res, next) => {
         return res.status(400).json({ success: false, statusCode: 400, message: 'Invalid ID format' });
     }
 
+    if (err.code === 11000) {
+        return res.status(409).json({
+            success: false,
+            statusCode: 409,
+            message: 'Email is already registered',
+        });
+    }
+
     if (err instanceof ApiError) {
         return res.status(err.statusCode).json({ success: false, statusCode: err.statusCode, message: err.message });
     }

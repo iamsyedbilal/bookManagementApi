@@ -6,6 +6,7 @@ import { notFoundMiddleware } from './middlewares/notFoundMiddleware.js';
 // Routes Imports
 import healthRoute from './routes/healthRoute.js';
 import bookRoute from './routes/bookRoute.js';
+import userRoute from './routes/userRoute.js';
 import swaggerRoute from './docs/swagger.js';
 
 const app = express();
@@ -28,6 +29,7 @@ app.use(cookieParser());
 // Routes
 app.use('/api/health', healthRoute);
 app.use('/api/books', bookRoute);
+app.use('/api/users', userRoute);
 app.use('/api-docs', swaggerRoute);
 
 app.use(notFoundMiddleware);
