@@ -9,6 +9,9 @@ const _config = {
     env: process.env.NODE_ENV,
     accessToken: process.env.ACCESS_TOKEN_SECRET,
     refreshToken: process.env.REFRESH_TOKEN_SECRET,
+    adminName: process.env.ADMIN_NAME,
+    adminEmail: process.env.ADMIN_EMAIL,
+    adminPassword: process.env.ADMIN_PASSWORD,
 };
 
 export const config = Object.freeze(_config);

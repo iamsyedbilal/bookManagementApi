@@ -9,7 +9,7 @@ import {
     updateBookController,
 } from '../controllers/bookController.js';
 import { verifyJWT } from '../middlewares/verifyJWT.js';
-import { authorizeRole } from '../middlewares/roleMiddleware.js';
+import { authorizeRoles } from '../middlewares/roleMiddleware.js';
 
 const router = express.Router();
 
