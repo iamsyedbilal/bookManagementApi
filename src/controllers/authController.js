@@ -4,6 +4,7 @@ import RefreshToken from '../models/refreshTokenModel.js';
 import hashToken from '../utils/hashToken.js';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/config.js';
+import { refreshCookieOptions } from '../utils/cookieOptions.js';
 
 // Register User
 export const register = async (req, res) => {
@@ -66,13 +67,7 @@ export const login = async (req, res) => {
     });
 
     // Send refresh token through an HttpOnly cookie
-    res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: '/api/auth',
-    });
+    res.cookie('refreshToken', refreshToken, refreshCookieOptions);
 
     return res.status(200).json({
         success: true,
@@ -107,6 +102,7 @@ export const refresh = async (req, res) => {
     const tokenRecord = await RefreshToken.findOne({
         tokenHash,
         expiresAt: { $gt: new Date() },
+        revokedAt: null,
     });
 
     if (!tokenRecord) {
@@ -115,16 +111,24 @@ export const refresh = async (req, res) => {
 
     const user = await User.findById(tokenRecord.user);
     const tokenUserId = payload._id ?? payload.id ?? payload.sub;
-    if (!user || (tokenUserId && tokenUserId.toString() !== user._id.toString())) {
+    if (!user || !tokenUserId || tokenUserId.toString() !== user._id.toString()) {
         throw new ApiError(401, 'Invalid or expired refresh token');
     }
 
     // Atomically consume the old session to prevent refresh-token reuse.
-    const revokedToken = await RefreshToken.findOneAndDelete({
-        _id: tokenRecord._id,
-        tokenHash,
-        expiresAt: { $gt: new Date() },
-    });
+    const revokedToken = await RefreshToken.findOneAndUpdate(
+        {
+            _id: tokenRecord._id,
+            tokenHash,
+            expiresAt: { $gt: new Date() },
+            revokedAt: null,
+        },
+        {
+            $set: { revokedAt: new Date() },
+        },
+        { new: true }
+    );
+
     if (!revokedToken) {
         throw new ApiError(401, 'Invalid or expired refresh token');
     }
@@ -138,13 +142,40 @@ export const refresh = async (req, res) => {
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     });
 
-    res.cookie('refreshToken', refreshToken, {
+    res.cookie('refreshToken', refreshToken, refreshCookieOptions);
+
+    return res.status(200).json({ success: true, accessToken });
+};
+
+// Logout
+export const logout = async (req, res) => {
+    // 1. Get refresh token from cookie
+    const refreshToken = req.cookies?.refreshToken;
+    // 2. If token exists:
+    //    - Hash the token
+    //    - Find and update the matching active session
+    //    - Match both the token hash and req.user._id
+    if (refreshToken) {
+        await RefreshToken.findOneAndUpdate(
+            {
+                tokenHash: hashToken(refreshToken),
+                user: req.user._id,
+                expiresAt: { $gt: new Date() },
+                revokedAt: null,
+            },
+            { $set: { revokedAt: new Date() } }
+        );
+    }
+
+    // 3. Clear the refreshToken cookie
+    //    Use the same path and compatible options as login.
+    res.clearCookie('refreshToken', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: config.env === 'production',
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
         path: '/api/auth',
     });
 
-    return res.status(200).json({ success: true, accessToken });
+    // 4. Return a success response
+    return res.status(200).json({ success: true });
 };

@@ -8,13 +8,14 @@ import {
     fetchBookById,
     updateBookController,
 } from '../controllers/bookController.js';
+import { verifyJWT } from '../middlewares/verifyJWT.js';
 
 const router = express.Router();
 
-router.route('/').get(fetchAllBooks);
-router.route('/:id').get(fetchBookById);
-router.route('/create').post(validateMiddleware(createBookSchema), createBookController);
-router.route('/:id').patch(validateMiddleware(updateBookSchema), updateBookController);
-router.route('/:id').delete(deleteBookController);
+router.route('/').get(verifyJWT, fetchAllBooks);
+router.route('/:id').get(verifyJWT, fetchBookById);
+router.route('/create').post(verifyJWT, validateMiddleware(createBookSchema), createBookController);
+router.route('/:id').patch(verifyJWT, validateMiddleware(updateBookSchema), updateBookController);
+router.route('/:id').delete(verifyJWT, deleteBookController);
 
 export default router;
