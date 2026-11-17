@@ -4,9 +4,46 @@ import ApiError from '../utils/ApiError.js';
 
 // Fetch All Books
 export const fetchAllBooks = async (req, res) => {
-    const books = await Book.find();
+    const parseQueryInteger = (value, name, defaultValue, max = Number.MAX_SAFE_INTEGER) => {
+        if (value === undefined) return defaultValue;
+        if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) {
+            throw new ApiError(400, `${name} must be a positive integer`);
+        }
 
-    return res.status(200).json(books);
+        const parsed = Number(value);
+        if (!Number.isSafeInteger(parsed) || parsed > max) {
+            throw new ApiError(400, `${name} is out of range`);
+        }
+        return parsed;
+    };
+
+    const page = parseQueryInteger(req.query.page, 'page', 1);
+    const limit = parseQueryInteger(req.query.limit, 'limit', 10, 100);
+
+    if (!Number.isSafeInteger((page - 1) * limit)) {
+        throw new ApiError(400, 'page is out of range');
+    }
+    const filter = {};
+
+    const options = {
+        sort: { createdAt: -1, _id: -1 }, // Required by findAndCount()
+        skip: (page - 1) * limit,
+        limit,
+        lean: true, // Optional: returns plain JS objects for faster reads
+    };
+
+    const [books, total] = await Book.findAndCount(filter, null, options);
+
+    return res.status(200).json({
+        success: true,
+        data: books,
+        pagination: {
+            totalRecords: total,
+            totalPages: Math.ceil(total / limit),
+            currentPage: page,
+            limit,
+        },
+    });
 };
 
 // Create Book Controller
