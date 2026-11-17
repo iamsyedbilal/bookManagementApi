@@ -42,6 +42,18 @@ export const fetchAllBooks = async (req, res) => {
         }
     }
 
+    if (req.query.search !== undefined) {
+        if (typeof req.query.search !== 'string' || req.query.search.trim() === '') {
+            throw new ApiError(400, 'search must be a non-empty string');
+        }
+
+        const searchRegex = escapeRegex(req.query.search.trim());
+        filter.$or = [
+            { title: { $regex: searchRegex, $options: 'i' } },
+            { author: { $regex: searchRegex, $options: 'i' } },
+        ];
+    }
+
     if (req.query.availability !== undefined) {
         if (req.query.availability !== 'true' && req.query.availability !== 'false') {
             throw new ApiError(400, 'availability must be true or false');
