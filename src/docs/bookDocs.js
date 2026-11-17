@@ -3,18 +3,38 @@
  * /api/books:
  *   get:
  *     summary: Fetch all books
- *     description: Retrieves all books from the database.
+ *     description: Retrieves books with pagination support.
  *     tags:
  *       - Books
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Page number to retrieve.
+ *         example: 1
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 10
+ *         description: Number of books per page. Maximum allowed is 100.
+ *         example: 10
  *     responses:
  *       200:
  *         description: Books retrieved successfully.
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Book'
+ *               $ref: '#/components/schemas/PaginatedBooksResponse'
+ *       400:
+ *         $ref: '#/components/responses/BadRequest'
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
@@ -174,6 +194,48 @@
  *         message:
  *           type: string
  *           example: Invalid ID format
+ *
+ *     Pagination:
+ *       type: object
+ *       required:
+ *         - totalRecords
+ *         - totalPages
+ *         - currentPage
+ *         - limit
+ *       properties:
+ *         totalRecords:
+ *           type: integer
+ *           description: Total number of books matching the query.
+ *           example: 43
+ *         totalPages:
+ *           type: integer
+ *           description: Total number of available pages.
+ *           example: 5
+ *         currentPage:
+ *           type: integer
+ *           description: Currently requested page.
+ *           example: 1
+ *         limit:
+ *           type: integer
+ *           description: Maximum number of books per page.
+ *           example: 10
+ *
+ *     PaginatedBooksResponse:
+ *       type: object
+ *       required:
+ *         - success
+ *         - data
+ *         - pagination
+ *       properties:
+ *         success:
+ *           type: boolean
+ *           example: true
+ *         data:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Book'
+ *         pagination:
+ *           $ref: '#/components/schemas/Pagination'
  *
  *     Book:
  *       type: object

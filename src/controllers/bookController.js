@@ -25,6 +25,30 @@ export const fetchAllBooks = async (req, res) => {
     }
     const filter = {};
 
+    const escapeRegex = (value) => {
+        return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    };
+
+    for (const field of ['genre', 'author']) {
+        const value = req.query[field];
+        if (value !== undefined) {
+            if (typeof value !== 'string' || value.trim() === '') {
+                throw new ApiError(400, `${field} must be a non-empty string`);
+            }
+            filter[field] = {
+                $regex: `^${escapeRegex(value.trim())}$`,
+                $options: 'i',
+            };
+        }
+    }
+
+    if (req.query.availability !== undefined) {
+        if (req.query.availability !== 'true' && req.query.availability !== 'false') {
+            throw new ApiError(400, 'availability must be true or false');
+        }
+        filter.availability = req.query.availability === 'true';
+    }
+
     const options = {
         sort: { createdAt: -1, _id: -1 }, // Required by findAndCount()
         skip: (page - 1) * limit,
