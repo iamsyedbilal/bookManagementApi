@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'; // If using Jest, swap 'vitest' with '@jest/globals'
-import { buildBookQuery } from '../utils/bookQuery.js'; // Update path to your file
+import { describe, it, expect } from 'vitest';
+import { buildBookQuery } from '../utils/bookQuery.js';
 import ApiError from '../utils/ApiError.js';
 
 describe('buildBookQuery', () => {
@@ -30,6 +30,19 @@ describe('buildBookQuery', () => {
             expect(result.options.limit).toBe(25);
             expect(result.options.skip).toBe(50);
         });
+
+        it('accepts the minimum page value', () => {
+            const result = buildBookQuery({ page: '1' });
+
+            expect(result.page).toBe(1);
+            expect(result.options.skip).toBe(0);
+        });
+
+        it('accepts the maximum limit value', () => {
+            const result = buildBookQuery({ limit: '100' });
+
+            expect(result.options.limit).toBe(100);
+        });
     });
 
     // 3. Genre and author filtering
@@ -56,6 +69,17 @@ describe('buildBookQuery', () => {
                 $or: [
                     { title: { $regex: 'C\\+\\+ \\[Guide\\]', $options: 'i' } },
                     { author: { $regex: 'C\\+\\+ \\[Guide\\]', $options: 'i' } },
+                ],
+            });
+        });
+
+        it('escapes special characters in a search term', () => {
+            const result = buildBookQuery({ search: 'C++' });
+
+            expect(result.filter).toEqual({
+                $or: [
+                    { title: { $regex: 'C\\+\\+', $options: 'i' } },
+                    { author: { $regex: 'C\\+\\+', $options: 'i' } },
                 ],
             });
         });
@@ -142,15 +166,17 @@ describe('buildBookQuery', () => {
             { query: { sortBy: 'title', sortOrder: 'up' }, message: 'sort order must be asc or desc' },
         ];
 
-        it.each(invalidCases)('throws ApiError(400) for $query', ({ query, message }) => {
-            expect(() => buildBookQuery(query)).toThrow(ApiError);
-            expect(() => buildBookQuery(query)).toThrow(message);
-
+        it.each(invalidCases)('rejects invalid input: %o', ({ query, message }) => {
+            let error;
             try {
                 buildBookQuery(query);
             } catch (err) {
-                expect(err.statusCode).toBe(400);
+                error = err;
             }
+
+            expect(error).toBeInstanceOf(ApiError);
+            expect(error.message).toContain(message);
+            expect(error.statusCode).toBe(400);
         });
     });
 });
