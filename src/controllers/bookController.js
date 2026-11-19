@@ -7,7 +7,7 @@ import { buildBookQuery } from '../utils/bookQuery.js';
 export const fetchAllBooks = async (req, res) => {
     const { filter, options, page } = buildBookQuery(req.query);
 
-    const [books, total] = await Book.findAndCount(filter, null, options);
+    const [books, total] = await Book.findAndCount(filter, null, options).lean();
 
     return res.status(200).json({
         success: true,
@@ -36,7 +36,7 @@ export const fetchBookById = async (req, res) => {
         throw new ApiError(400, 'Invalid book ID');
     }
 
-    const book = await Book.findById(id);
+    const book = await Book.findById(id).lean();
 
     if (!book) {
         throw new ApiError(404, 'Book not found');

@@ -55,6 +55,15 @@ const bookSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+// Single-field index for exact title searches
+bookSchema.index({ title: 1 });
+
+// Compound index for genre and author filtering
+bookSchema.index({ genre: 1, author: 1 });
+
+// Single-field index for author-only searches
+bookSchema.index({ author: 1 });
+
 const Book = mongoose.model('Book', bookSchema);
 
 export default Book;
