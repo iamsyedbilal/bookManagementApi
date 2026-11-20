@@ -7,7 +7,7 @@ import { buildBookQuery } from '../utils/bookQuery.js';
 export const fetchAllBooks = async (req, res) => {
     const { filter, options, page } = buildBookQuery(req.query);
 
-    const [books, total] = await Book.findAndCount(filter, null, options).lean();
+    const [books, total] = await Book.findAndCount(filter, null, options);
 
     return res.status(200).json({
         success: true,
@@ -17,6 +17,8 @@ export const fetchAllBooks = async (req, res) => {
             totalPages: Math.ceil(total / options.limit),
             currentPage: page,
             limit: options.limit,
+            hasPrevPage: page > 1,
+            hasNextPage: page < Math.ceil(total / options.limit),
         },
     });
 };
