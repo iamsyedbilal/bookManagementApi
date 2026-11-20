@@ -1,6 +1,7 @@
 import ApiError from './ApiError.js';
+import mongoose from 'mongoose';
 
-// 1. Validate and parse pagination numbers
+// Validate and parse pagination numbers
 const parseQueryInteger = (value, name, defaultValue, max = Number.MAX_SAFE_INTEGER) => {
     if (value === undefined) return defaultValue;
 
@@ -17,21 +18,42 @@ const parseQueryInteger = (value, name, defaultValue, max = Number.MAX_SAFE_INTE
     return parsed;
 };
 
-// 2. Escape special regex characters
+// Escape special regex characters
 const escapeRegex = (value) => {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
-// 3. Build the complete book query
+// Decode and validate cursor
+const decodeCursor = (cursor) => {
+    try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+
+        if (
+            typeof decoded.createdAt !== 'string' ||
+            Number.isNaN(Date.parse(decoded.createdAt)) ||
+            typeof decoded.id !== 'string' ||
+            !mongoose.Types.ObjectId.isValid(decoded.id)
+        ) {
+            throw new Error('Invalid cursor');
+        }
+
+        return {
+            createdAt: new Date(decoded.createdAt),
+            id: new mongoose.Types.ObjectId(decoded.id),
+        };
+    } catch {
+        throw new ApiError(400, 'Invalid cursor');
+    }
+};
+
+// Build the complete book query
 export const buildBookQuery = (query) => {
-    // Pagination
-    const page = parseQueryInteger(query.page, 'page', 1);
     const limit = parseQueryInteger(query.limit, 'limit', 10, 100);
 
-    const skip = (page - 1) * limit;
+    const isCursorMode = query.cursor !== undefined;
 
-    if (!Number.isSafeInteger(skip)) {
-        throw new ApiError(400, 'page is out of range');
+    if (isCursorMode && query.page !== undefined) {
+        throw new ApiError(400, 'page and cursor cannot be used together');
     }
 
     // Filtering
@@ -113,9 +135,59 @@ export const buildBookQuery = (query) => {
         };
     }
 
-    // Return everything needed by the controller
+    // Cursor pagination supports the default latest-first sorting only
+    if (isCursorMode && sortBy !== undefined) {
+        throw new ApiError(400, 'Cursor pagination currently supports default sorting only');
+    }
+
+    // Cursor filter: createdAt descending, then _id descending
+    if (isCursorMode) {
+        if (typeof query.cursor !== 'string' || query.cursor.trim() === '') {
+            throw new ApiError(400, 'Invalid cursor');
+        }
+
+        const cursor = decodeCursor(query.cursor);
+
+        const cursorCondition = {
+            $or: [
+                { createdAt: { $lt: cursor.createdAt } },
+                {
+                    createdAt: cursor.createdAt,
+                    _id: { $lt: cursor.id },
+                },
+            ],
+        };
+
+        // Keep cursor conditions separate from search's $or
+        filter.$and = [...(filter.$and ?? []), cursorCondition];
+    }
+
+    // Cursor mode
+    if (isCursorMode || query.page === undefined) {
+        return {
+            filter,
+            mode: 'cursor',
+            options: {
+                sort: { createdAt: -1, _id: -1 },
+                limit: limit + 1,
+                lean: true,
+            },
+            limit,
+        };
+    }
+
+    // Existing offset pagination
+    const page = parseQueryInteger(query.page, 'page', 1);
+
+    const skip = (page - 1) * limit;
+
+    if (!Number.isSafeInteger(skip)) {
+        throw new ApiError(400, 'page is out of range');
+    }
+
     return {
         filter,
+        mode: 'offset',
         options: {
             sort,
             skip,
@@ -123,5 +195,6 @@ export const buildBookQuery = (query) => {
             lean: true,
         },
         page,
+        limit,
     };
 };
