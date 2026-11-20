@@ -63,6 +63,7 @@ bookSchema.index({ genre: 1, author: 1 });
 
 // Single-field index for author-only searches
 bookSchema.index({ author: 1 });
+bookSchema.index({ createdAt: -1, _id: -1 });
 
 const Book = mongoose.model('Book', bookSchema);
 

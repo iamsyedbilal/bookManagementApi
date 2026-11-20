@@ -5,20 +5,56 @@ import { buildBookQuery } from '../utils/bookQuery.js';
 
 // Fetch All Books
 export const fetchAllBooks = async (req, res) => {
-    const { filter, options, page } = buildBookQuery(req.query);
+    const { filter, options, mode, page, limit } = buildBookQuery(req.query);
 
+    // Cursor pagination
+    if (mode === 'cursor') {
+        const books = await Book.find(filter).sort(options.sort).limit(options.limit).lean();
+
+        const hasNextPage = books.length > limit;
+
+        if (hasNextPage) {
+            books.pop();
+        }
+
+        const lastBook = books[books.length - 1];
+
+        const nextCursor =
+            hasNextPage && lastBook
+                ? Buffer.from(
+                      JSON.stringify({
+                          createdAt: lastBook.createdAt.toISOString(),
+                          id: lastBook._id.toString(),
+                      })
+                  ).toString('base64url')
+                : null;
+
+        return res.status(200).json({
+            success: true,
+            data: books,
+            pagination: {
+                limit,
+                hasNextPage,
+                nextCursor,
+            },
+        });
+    }
+
+    // Existing offset pagination
     const [books, total] = await Book.findAndCount(filter, null, options);
+
+    const totalPages = Math.ceil(total / limit);
 
     return res.status(200).json({
         success: true,
         data: books,
         pagination: {
             totalRecords: total,
-            totalPages: Math.ceil(total / options.limit),
+            totalPages,
             currentPage: page,
-            limit: options.limit,
+            limit,
             hasPrevPage: page > 1,
-            hasNextPage: page < Math.ceil(total / options.limit),
+            hasNextPage: page < totalPages,
         },
     });
 };
