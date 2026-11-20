@@ -1,32 +1,32 @@
-import ApiError from './ApiError.js';
 import mongoose from 'mongoose';
+import ApiError from './ApiError.js';
 
-// Validate and parse pagination numbers
-const parseQueryInteger = (value, name, defaultValue, max = Number.MAX_SAFE_INTEGER) => {
+// Validate positive integers from query parameters.
+const parseQueryInteger = (value, name, defaultValue, max = 100) => {
     if (value === undefined) return defaultValue;
 
     if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) {
         throw new ApiError(400, `${name} must be a positive integer`);
     }
 
-    const parsed = Number(value);
+    const number = Number(value);
 
-    if (!Number.isSafeInteger(parsed) || parsed > max) {
+    if (!Number.isSafeInteger(number) || number > max) {
         throw new ApiError(400, `${name} is out of range`);
     }
 
-    return parsed;
+    return number;
 };
 
-// Escape special regex characters
+// Escape special regex characters in user input.
 const escapeRegex = (value) => {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
-// Decode and validate cursor
-const decodeCursor = (cursor) => {
+// Decode and validate the cursor.
+const decodeCursor = (value) => {
     try {
-        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+        const decoded = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
 
         if (
             typeof decoded.createdAt !== 'string' ||
@@ -34,7 +34,7 @@ const decodeCursor = (cursor) => {
             typeof decoded.id !== 'string' ||
             !mongoose.Types.ObjectId.isValid(decoded.id)
         ) {
-            throw new Error('Invalid cursor');
+            throw new Error();
         }
 
         return {
@@ -46,109 +46,54 @@ const decodeCursor = (cursor) => {
     }
 };
 
-// Build the complete book query
-export const buildBookQuery = (query) => {
-    const limit = parseQueryInteger(query.limit, 'limit', 10, 100);
-
-    const isCursorMode = query.cursor !== undefined;
-
-    if (isCursorMode && query.page !== undefined) {
-        throw new ApiError(400, 'page and cursor cannot be used together');
-    }
-
-    // Filtering
+// Build search and filtering conditions.
+const buildBookFilter = (query) => {
     const filter = {};
 
+    // Filter by genre and author.
     for (const field of ['genre', 'author']) {
         const value = query[field];
 
-        if (value !== undefined) {
-            if (typeof value !== 'string' || value.trim() === '') {
-                throw new ApiError(400, `${field} must be a non-empty string`);
-            }
+        if (value === undefined) continue;
 
-            filter[field] = {
-                $regex: `^${escapeRegex(value.trim())}$`,
-                $options: 'i',
-            };
+        if (typeof value !== 'string' || !value.trim()) {
+            throw new ApiError(400, `${field} must be a non-empty string`);
         }
+
+        filter[field] = {
+            $regex: `^${escapeRegex(value.trim())}$`,
+            $options: 'i',
+        };
     }
 
-    // Searching
+    // Search by title or author.
     if (query.search !== undefined) {
-        if (typeof query.search !== 'string' || query.search.trim() === '') {
+        if (typeof query.search !== 'string' || !query.search.trim()) {
             throw new ApiError(400, 'search must be a non-empty string');
         }
 
-        const searchRegex = escapeRegex(query.search.trim());
+        const search = escapeRegex(query.search.trim());
 
-        filter.$or = [
-            { title: { $regex: searchRegex, $options: 'i' } },
-            { author: { $regex: searchRegex, $options: 'i' } },
-        ];
+        filter.$or = [{ title: { $regex: search, $options: 'i' } }, { author: { $regex: search, $options: 'i' } }];
     }
 
-    // Availability filtering
+    // Filter by availability.
     if (query.availability !== undefined) {
-        if (query.availability !== 'true' && query.availability !== 'false') {
+        if (!['true', 'false'].includes(query.availability)) {
             throw new ApiError(400, 'availability must be true or false');
         }
 
         filter.availability = query.availability === 'true';
     }
 
-    // Sorting
-    const allowedSortFields = new Set(['title', 'author', 'genre', 'availability', 'createdAt', 'updatedAt']);
+    return filter;
+};
 
-    const sortBy = query.sortBy ?? (typeof query.sort === 'string' ? query.sort.replace(/^[-+]/, '') : undefined);
-
-    const rawSortOrder = query.sortOrder ?? query.order;
-
-    let sort;
-
-    if (sortBy === undefined) {
-        sort = { createdAt: -1, _id: -1 };
-    } else {
-        if (typeof sortBy !== 'string' || !allowedSortFields.has(sortBy)) {
-            throw new ApiError(400, 'Invalid sortBy field');
-        }
-
-        let direction;
-
-        if (typeof query.sort === 'string' && /^[-+]/.test(query.sort)) {
-            direction = query.sort.startsWith('-') ? 'desc' : 'asc';
-        } else if (rawSortOrder !== undefined) {
-            direction = typeof rawSortOrder === 'string' ? rawSortOrder.toLowerCase() : '';
-        } else {
-            direction = 'asc';
-        }
-
-        if (direction !== 'asc' && direction !== 'desc') {
-            throw new ApiError(400, 'sort order must be asc or desc');
-        }
-
-        const sortDirection = direction === 'asc' ? 1 : -1;
-
-        sort = {
-            [sortBy]: sortDirection,
-            _id: sortDirection,
-        };
-    }
-
-    // Cursor pagination supports the default latest-first sorting only
-    if (isCursorMode && sortBy !== undefined) {
-        throw new ApiError(400, 'Cursor pagination currently supports default sorting only');
-    }
-
-    // Cursor filter: createdAt descending, then _id descending
-    if (isCursorMode) {
-        if (typeof query.cursor !== 'string' || query.cursor.trim() === '') {
-            throw new ApiError(400, 'Invalid cursor');
-        }
-
-        const cursor = decodeCursor(query.cursor);
-
-        const cursorCondition = {
+// Add cursor conditions while preserving existing filters.
+const addCursorFilter = (filter, cursor) => {
+    filter.$and = [
+        ...(filter.$and ?? []),
+        {
             $or: [
                 { createdAt: { $lt: cursor.createdAt } },
                 {
@@ -156,45 +101,48 @@ export const buildBookQuery = (query) => {
                     _id: { $lt: cursor.id },
                 },
             ],
-        };
+        },
+    ];
+};
 
-        // Keep cursor conditions separate from search's $or
-        filter.$and = [...(filter.$and ?? []), cursorCondition];
-    }
+// Build the complete book query.
+export const buildBookQuery = (query) => {
+    const limit = parseQueryInteger(query.limit, 'limit');
 
-    // Cursor mode
-    if (isCursorMode || query.page === undefined) {
-        return {
-            filter,
-            mode: 'cursor',
-            options: {
-                sort: { createdAt: -1, _id: -1 },
-                limit: limit + 1,
-                lean: true,
-            },
-            limit,
-        };
-    }
+    const filter = buildBookFilter(query);
 
-    // Existing offset pagination
-    const page = parseQueryInteger(query.page, 'page', 1);
+    // Decode cursor only when the client provides one.
+    if (query.cursor !== undefined) {
+        if (typeof query.cursor !== 'string' || !query.cursor.trim()) {
+            throw new ApiError(400, 'Invalid cursor');
+        }
 
-    const skip = (page - 1) * limit;
+        const cursor = decodeCursor(query.cursor);
 
-    if (!Number.isSafeInteger(skip)) {
-        throw new ApiError(400, 'page is out of range');
+        addCursorFilter(filter, cursor);
     }
 
     return {
         filter,
-        mode: 'offset',
-        options: {
-            sort,
-            skip,
-            limit,
-            lean: true,
+
+        // Fields returned to the client.
+        projection: {
+            _id: 1,
+            title: 1,
+            author: 1,
+            ISBN: 1,
+            publicationYear: 1,
+            genre: 1,
+            availability: 1,
+            createdAt: 1,
         },
-        page,
+
+        // Fixed sorting ensures consistent cursor pagination.
+        options: {
+            sort: { createdAt: -1, _id: -1 },
+            limit: limit + 1,
+        },
+
         limit,
     };
 };

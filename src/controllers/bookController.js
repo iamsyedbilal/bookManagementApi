@@ -4,57 +4,39 @@ import ApiError from '../utils/ApiError.js';
 import { buildBookQuery } from '../utils/bookQuery.js';
 
 // Fetch All Books
+
 export const fetchAllBooks = async (req, res) => {
-    const { filter, options, mode, page, limit } = buildBookQuery(req.query);
+    const { filter, projection, options, limit } = buildBookQuery(req.query);
 
-    // Cursor pagination
-    if (mode === 'cursor') {
-        const books = await Book.find(filter).sort(options.sort).limit(options.limit).lean();
+    // Fetch one extra book to check whether another page exists.
+    const books = await Book.find(filter, projection).sort(options.sort).limit(options.limit).lean();
 
-        const hasNextPage = books.length > limit;
+    const hasNextPage = books.length > limit;
 
-        if (hasNextPage) {
-            books.pop();
-        }
-
-        const lastBook = books[books.length - 1];
-
-        const nextCursor =
-            hasNextPage && lastBook
-                ? Buffer.from(
-                      JSON.stringify({
-                          createdAt: lastBook.createdAt.toISOString(),
-                          id: lastBook._id.toString(),
-                      })
-                  ).toString('base64url')
-                : null;
-
-        return res.status(200).json({
-            success: true,
-            data: books,
-            pagination: {
-                limit,
-                hasNextPage,
-                nextCursor,
-            },
-        });
+    // Remove the extra book because it is only used for checking.
+    if (hasNextPage) {
+        books.pop();
     }
 
-    // Existing offset pagination
-    const [books, total] = await Book.findAndCount(filter, null, options);
+    const lastBook = books[books.length - 1];
 
-    const totalPages = Math.ceil(total / limit);
+    // Generate the next cursor using the last returned book.
+    const nextCursor = hasNextPage
+        ? Buffer.from(
+              JSON.stringify({
+                  createdAt: lastBook.createdAt.toISOString(),
+                  id: lastBook._id.toString(),
+              })
+          ).toString('base64url')
+        : null;
 
     return res.status(200).json({
         success: true,
         data: books,
         pagination: {
-            totalRecords: total,
-            totalPages,
-            currentPage: page,
             limit,
-            hasPrevPage: page > 1,
-            hasNextPage: page < totalPages,
+            hasNextPage,
+            nextCursor,
         },
     });
 };
