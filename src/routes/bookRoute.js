@@ -6,6 +6,7 @@ import {
     deleteBookController,
     fetchAllBooks,
     fetchBookById,
+    getBookGenreStats,
     updateBookController,
 } from '../controllers/bookController.js';
 import { verifyJWT } from '../middlewares/verifyJWT.js';
@@ -22,5 +23,6 @@ router
     .route('/:id')
     .patch(verifyJWT, authorizeRoles('admin'), validateMiddleware(updateBookSchema), updateBookController);
 router.route('/:id').delete(verifyJWT, authorizeRoles('admin'), deleteBookController);
+router.get("/stats/genres", getBookGenreStats);
 
 export default router;

@@ -8,38 +8,78 @@ import { buildBookQuery } from '../utils/bookQuery.js';
 export const fetchAllBooks = async (req, res) => {
     const { filter, projection, options, limit } = buildBookQuery(req.query);
 
-    // Fetch one extra book to check whether another page exists.
-    const books = await Book.find(filter, projection).sort(options.sort).limit(options.limit).lean();
+    // Build the aggregation pipeline.
+    const pipeline = [
+        { $match: filter },
+        { $sort: options.sort },
+        { $limit: options.limit },
+    ];
 
+    // Apply projection while preserving fields needed for cursor pagination.
+    if (projection) {
+        const aggregateProjection =
+            typeof projection === 'string'
+                ? Object.fromEntries(
+                      projection
+                          .split(/\s+/)
+                          .filter(Boolean)
+                          .map((field) => {
+                              const excluded = field.startsWith('-');
+
+                              return [
+                                  excluded ? field.slice(1) : field,
+                                  excluded ? 0 : 1,
+                              ];
+                          })
+                  )
+                : { ...projection };
+
+        // Cursor generation requires these fields.
+        aggregateProjection._id = 1;
+        aggregateProjection.createdAt = 1;
+
+        pipeline.push({ $project: aggregateProjection });
+    }
+
+    const books = await Book.aggregate(pipeline);
+
+    // An extra document tells us whether another page exists.
     const hasNextPage = books.length > limit;
 
-    // Remove the extra book because it is only used for checking.
     if (hasNextPage) {
         books.pop();
     }
 
     const lastBook = books[books.length - 1];
 
-    // Generate the next cursor using the last returned book.
-    const nextCursor = hasNextPage
-        ? Buffer.from(
-              JSON.stringify({
-                  createdAt: lastBook.createdAt.toISOString(),
-                  id: lastBook._id.toString(),
-              })
-          ).toString('base64url')
-        : null;
+    // Generate cursor from the last returned document.
+    const nextCursor =
+        hasNextPage && lastBook
+            ? Buffer.from(
+                  JSON.stringify({
+                      createdAt: lastBook.createdAt.toISOString(),
+                      id: lastBook._id.toString(),
+                  })
+              ).toString('base64url')
+            : null;
+
+    // Remove the internal field from the public response.
+    const responseBooks = books.map(({ createdAt, ...book }) => book);
 
     return res.status(200).json({
         success: true,
-        data: books,
-        pagination: {
+        data: responseBooks,
+         pagination: {
+            totalRecords: total,
+            totalPages,
+            currentPage: page,
             limit,
-            hasNextPage,
-            nextCursor,
+            hasPrevPage: page > 1,
+            hasNextPage: page < totalPages,
         },
     });
 };
+
 
 // Create Book Controller
 export const createBookController = async (req, res) => {
@@ -97,4 +137,39 @@ export const deleteBookController = async (req, res) => {
     }
 
     return res.status(200).json({ message: 'Book deleted successfully' });
+};
+
+
+// GET BOOK GENRE STATS
+export const getBookGenreStats = async (req, res) => {
+    const stats = await Book.aggregate([
+        {
+            $group: {
+                _id: "$genre",
+                totalBooks: { $sum: 1 },
+                averagePublicationYear: {
+                    $avg: "$publicationYear",
+                },
+            },
+        },
+        {
+            $sort: {
+                totalBooks: -1,
+            },
+        },
+        {
+            $project: {
+                _id: 0,
+                genre: "$_id",
+                totalBooks: 1,
+                averagePublicationYear: 1,
+            },
+        },
+    ]);
+
+    return res.status(200).json({
+        success: true,
+        message: "Book genre statistics fetched successfully",
+        data: stats,
+    });
 };
