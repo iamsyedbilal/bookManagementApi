@@ -173,3 +173,43 @@ export const getBookGenreStats = async (req, res) => {
         data: stats,
     });
 };
+
+
+// GET Book With User Details
+export const getBooksWithUserDetails = async (req, res) => {
+    const books = await Book.aggregate([
+        {
+            $lookup: {
+                from: "users",
+                localField: "addedBy",
+                foreignField: "_id",
+                as: "userDetails",
+            },
+        },
+        {
+            $unwind: "$userDetails",
+        },
+        {
+            $project: {
+                title: 1,
+                author: 1,
+                ISBN: 1,
+                genre: 1,
+                publicationYear: 1,
+                availability: 1,
+                addedBy: {
+                    _id: "$userDetails._id",
+                    name: "$userDetails.name",
+                    email: "$userDetails.email",
+                },
+            },
+        },
+    ]);
+
+    return res.status(200).json({
+        success: true,
+        message: "Books with user details fetched successfully",
+        data: books,
+    });
+};
+
