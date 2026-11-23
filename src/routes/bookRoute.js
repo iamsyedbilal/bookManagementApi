@@ -7,6 +7,7 @@ import {
     fetchAllBooks,
     fetchBookById,
     getBookGenreStats,
+    getBooksWithAge,
     getBooksWithUserDetails,
     updateBookController,
 } from '../controllers/bookController.js';
@@ -18,6 +19,7 @@ const router = express.Router();
 // Specific routes first
 router.get('/stats/genres', verifyJWT, getBookGenreStats);
 router.get('/with-user-details', verifyJWT, getBooksWithUserDetails);
+router.get('/with-age', verifyJWT, getBooksWithAge);
 
 router.route('/').get(verifyJWT, fetchAllBooks);
 router

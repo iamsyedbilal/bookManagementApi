@@ -4,7 +4,6 @@ import ApiError from '../utils/ApiError.js';
 import { buildBookQuery } from '../utils/bookQuery.js';
 
 // Fetch All Books
-
 export const fetchAllBooks = async (req, res) => {
     const { filter, projection, options, limit } = buildBookQuery(req.query);
 
@@ -209,6 +208,33 @@ export const getBooksWithUserDetails = async (req, res) => {
     return res.status(200).json({
         success: true,
         message: "Books with user details fetched successfully",
+        data: books,
+    });
+};
+
+// GET Books With Age Details
+export const getBooksWithAge = async (req, res) => {
+    const books = await Book.aggregate([
+        {
+            $addFields: {
+                bookAge: {
+                    $subtract: [
+                        { $year: "$$NOW" },
+                        "$publicationYear",
+                    ],
+                },
+            },
+        },
+        {
+            $set: {
+                isOldBook: { $gt: ["$bookAge", 10] },
+            },
+        },
+    ]);
+
+    return res.status(200).json({
+        success: true,
+        message: "Book age details fetched successfully",
         data: books,
     });
 };
