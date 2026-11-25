@@ -1,312 +1,376 @@
-# Book Management REST API
+# Book Management API — Product Requirements Document
 
-## Product Requirements Document (PRD)
-
-**Version:** 1.0  
-**Project:** Book Management REST API  
-**Status:** In Development  
-**Backend:** Node.js, Express.js, MongoDB, Mongoose  
-**Language:** JavaScript (ES Modules)
+**Version:** 2.0  
+**Status:** Active development  
+**Repository:** https://github.com/iamsyedbilal/bookManagementApi  
+**Runtime:** Node.js · JavaScript (ES Modules)  
+**Framework:** Express 5  
+**Database:** MongoDB · Mongoose
 
 ---
 
-## 1. Project Overview
+## 1. Purpose
 
-The Book Management REST API is a backend application designed to manage a collection of books through RESTful endpoints.
+Build a secure, maintainable REST API for managing a catalogue of books. The project is both a usable backend service and a learning project: each feature must be implemented, tested, documented, and understood.
 
-It provides secure authentication, role-based access control, book management, filtering, searching, sorting, pagination, and API documentation.
+This PRD is the source of truth for the agreed project scope. Implementation decisions or scope changes must be recorded here so we do not repeatedly rediscover requirements during reviews.
 
-The project aims to demonstrate practical backend engineering skills, including API architecture, database design, authentication, validation, error handling, testing, and performance optimization.
+## 2. Product goals
 
-## 2. Project Goals
+- Provide authentication and role-based authorization.
+- Allow authorized administrators to manage books.
+- Allow authenticated users to browse and discover books.
+- Support search, filtering, sorting, and **cursor-based pagination**.
+- Keep HTTP handling, business logic, persistence, validation, and shared middleware clearly separated.
+- Provide consistent errors and predictable API responses.
+- Verify behavior with unit, integration, and end-to-end API tests where appropriate.
+- Document setup, environment configuration, endpoints, and examples.
+- Review database query plans and indexes against actual query patterns.
 
-- Build a structured and maintainable REST API.
-- Implement secure user authentication and authorization.
-- Provide complete book CRUD functionality.
-- Support searching, filtering, sorting, and pagination.
-- Validate incoming requests.
-- Handle errors consistently.
-- Write meaningful automated tests.
-- Document the API using Swagger/OpenAPI.
-- Understand database performance and indexing.
-
-## 3. User Roles
+## 3. User roles and permissions
 
 ### Administrator
 
+- Register/login like other users (subject to the registration policy below).
+- Read the book catalogue and individual book details.
 - Create books.
 - Update books.
 - Delete books.
-- View the book collection.
-- Search, filter, sort, and paginate books.
 
-### Regular User
+### Regular user
 
-- Register and authenticate.
-- View books.
-- Search and filter books.
-- Sort and paginate results.
+- Register, log in, refresh a session, and log out.
+- Read the book catalogue and individual book details.
+- Search, filter, sort, and paginate the catalogue.
+- Cannot create, update, or delete books.
 
-Regular users cannot create, update, or delete books.
+Authorization must be enforced on the server for every protected write operation. Hiding UI controls is not an authorization mechanism.
 
-## 4. Functional Requirements
+### Administrator provisioning policy
 
-### 4.1 Authentication
+The project must define how the first administrator is created and how later users can or cannot become administrators. Do not allow a public registration request to assign an arbitrary privileged role. The chosen provisioning method must be documented and tested before release.
+
+## 4. Functional requirements
+
+### 4.1 Authentication and sessions
+
+Required capabilities:
 
 - User registration.
-- User login.
-- Access token generation.
-- Refresh token generation.
-- Access token verification.
-- Refresh token endpoint.
-- User logout.
-- Secure password hashing.
-- Role-based authorization.
+- User login using the agreed credential (email and password).
+- Password hashing with bcrypt; plaintext passwords must never be stored.
+- Short-lived access-token generation and verification.
+- Refresh-token generation and rotation.
+- Secure refresh-token storage (store a hash, not the raw refresh token).
+- Refresh endpoint that validates the presented refresh token and its session state.
+- Logout that revokes the relevant refresh-token session.
+- Authentication middleware for protected routes.
+- Role authorization middleware for administrator-only actions.
+- Safe user responses that never expose password hashes, refresh-token hashes, or secrets.
 
-### 4.2 Book Management
+Required failure behavior includes invalid credentials, missing/invalid/expired access tokens, invalid/revoked refresh tokens, and insufficient role permissions.
 
-Each book contains:
+Cookie transport, token expiry values, refresh-token reuse handling, and multi-device session policy must be made explicit in configuration/documentation and covered by tests. Do not silently assume a policy that has not been agreed.
 
-| Field           | Description            |
-| --------------- | ---------------------- |
-| title           | Book title             |
-| author          | Author name            |
-| ISBN            | Unique book identifier |
-| description     | Book description       |
-| publicationYear | Year of publication    |
-| genre           | Book category          |
-| availability    | Availability status    |
-| createdAt       | Creation timestamp     |
-| updatedAt       | Last update timestamp  |
+### 4.2 Book data model
 
-Supported operations:
+A book contains:
 
-- Create a book.
-- Retrieve all books.
-- Retrieve a single book.
-- Update a book.
-- Delete a book.
+| Field | Requirement |
+|---|---|
+| `title` | Required, trimmed string |
+| `author` | Required, trimmed string |
+| `ISBN` | Required unique identifier |
+| `description` | Required description with the validation limits defined in the validation schema |
+| `publicationYear` | Required valid year; must not be in the future |
+| `genre` | Required value from the supported genre list |
+| `availability` | Boolean; defaults to `true` when omitted on creation |
+| `createdAt` | Automatically maintained creation timestamp |
+| `updatedAt` | Automatically maintained update timestamp |
 
-### 4.3 Search
+Mongoose timestamps should be enabled. Password/user fields must not be included in book responses unless explicitly required by a future approved feature.
 
-Users can search books using:
+### 4.3 Book management
 
-- Title.
+- Create a book (administrator only).
+- List books (authenticated users).
+- Retrieve a book by ID (authenticated users).
+- Partially update a book (administrator only).
+- Delete a book (administrator only).
+- Validate IDs and return a not-found response when a valid ID does not exist.
+- Enforce ISBN uniqueness and return a consistent client error for duplicate ISBN values.
+- Do not allow clients to update immutable/system-managed fields such as `_id`, `createdAt`, or `updatedAt`.
+
+### 4.4 Search
+
+The list endpoint supports partial, case-insensitive search across:
+
+- Book title.
 - Author.
 
-Search should support partial, case-insensitive matching.
+Search input must be treated as literal user text. Escape regular-expression metacharacters; do not allow user input to inject arbitrary regular-expression behavior.
 
-User input must be safely escaped before being used in regular expressions.
-
-### 4.4 Filtering
+### 4.5 Filtering
 
 Supported filters:
 
-- Genre: case-insensitive exact matching.
-- Author: case-insensitive exact matching.
-- Availability: true or false.
+- `genre`: case-insensitive exact match.
+- `author`: case-insensitive exact match.
+- `availability`: `true` or `false`.
 
-Filters must work together with search.
+Search and filters must be combinable in one request. Invalid, empty, or incorrectly typed query values must be rejected with a clear validation error.
 
-### 4.5 Sorting
+### 4.6 Sorting
 
-Support ascending and descending sorting.
+Allow sorting only by explicitly approved fields:
 
-Supported fields:
+- `title`
+- `author`
+- `genre`
+- `availability`
+- `createdAt`
+- `updatedAt`
 
-- Title.
-- Author.
-- Genre.
-- Availability.
-- Created date.
-- Updated date.
+Support ascending and descending order using the API's documented query syntax. Reject unknown sort fields and invalid sort directions. Add a deterministic tie-breaker (the MongoDB `_id`) so records with equal sort values have a stable order.
 
-A deterministic secondary sort should be used to make pagination more consistent.
+### 4.7 Cursor-based pagination
 
-### 4.6 Pagination
-
-- Default page: 1.
-- Default limit: 10.
-- Maximum limit: 100.
-- Use offset-based pagination.
-- Return total records, total pages, current page, and limit.
-- Reject invalid pagination values.
-
-### 4.7 Validation
-
-Use Zod to validate incoming request data.
+**Cursor pagination is the agreed pagination strategy. Offset/page-based pagination is not part of the current API contract.**
 
 Requirements:
 
-- Required fields must be present.
-- String fields must be trimmed.
-- Invalid field types must be rejected.
-- Unknown fields must be rejected where strict validation is configured.
-- Update requests must support partial updates.
-- Empty update objects must be rejected.
+- The list endpoint accepts a `limit` and an optional opaque `cursor`.
+- Default limit: 10.
+- Maximum limit: 100.
+- Reject zero, negative, non-integer, malformed, or excessive limits.
+- The default ordering is newest first using `createdAt` and `_id` as a deterministic compound ordering.
+- The cursor represents the last record in the previous page and must be opaque to API clients (Base64URL encoding is acceptable; encoding is not encryption).
+- Use a stable continuation predicate that accounts for both the primary sort field and the `_id` tie-breaker.
+- Fetch at most `limit + 1` records to determine whether another page exists.
+- Return at most `limit` records.
+- Return pagination metadata containing `limit`, `hasNextPage`, and `nextCursor` (null when there is no next page).
+- Reject malformed or invalid cursors with a client error; do not silently restart at the first page.
+- Apply the same search and filter criteria consistently on every page.
+- Cursor behavior for non-default sort fields must be explicitly supported and tested, or those combinations must be rejected until implemented. Never return a cursor that cannot correctly continue the selected sort.
 
-### 4.8 Error Handling
+The implementation and tests must not mix offset metadata (page, totalPages, skip) with cursor pagination. If an exact total count is not required by the product, do not run an expensive count query solely to preserve the old offset response shape.
 
-Implement centralized error handling.
+### 4.8 Validation
 
-Expected cases:
+Use Zod for request validation.
 
-- Invalid request data.
-- Missing authentication.
-- Invalid or expired tokens.
-- Insufficient permissions.
-- Resource not found.
-- Database errors.
-- Unknown routes.
+- Validate request body and query parameters at the route boundary.
+- Trim applicable strings.
+- Reject invalid types rather than silently coercing them unless a specific coercion is deliberately documented.
+- Reject unknown fields for strict create/update schemas.
+- Create schema validates all required fields and defaults.
+- Update schema permits partial updates but rejects an empty update.
+- Validate IDs and cursor/limit query parameters.
+- Return consistent validation errors without leaking internal stack traces.
 
-Use consistent JSON error responses.
+The validation schema is the source of truth for field limits and allowed enum values; tests and API documentation must agree with it.
 
-## 5. API Endpoints
+### 4.9 Error handling and response format
 
-### Health
+- A centralized not-found handler handles unknown routes.
+- A centralized error handler maps known application, validation, Mongoose, and duplicate-key errors to appropriate HTTP statuses.
+- Unexpected errors return a generic 500 response; internal details are logged server-side, not exposed to clients.
+- Success and error response shapes must be consistent and documented.
+- Do not return stack traces, secrets, password hashes, or raw token hashes in production responses.
 
-- `GET /api/health`
+## 5. API contract
 
-### Authentication
+The following routes are the agreed baseline. The exact response envelope and cookie/header behavior must be documented in Swagger and integration tests.
 
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `POST /api/auth/refresh`
-- `POST /api/auth/logout`
+| Method | Path | Access | Purpose |
+|---|---|---|---|
+| GET | `/api/health` | Public | Health check |
+| POST | `/api/auth/register` | Public | Register a user |
+| POST | `/api/auth/login` | Public | Authenticate a user |
+| POST | `/api/auth/refresh` | Refresh session | Rotate/refresh an access session |
+| POST | `/api/auth/logout` | Authenticated session | Revoke the relevant refresh session |
+| GET | `/api/books` | Authenticated | List/search/filter/sort/cursor-paginate books |
+| GET | `/api/books/:id` | Authenticated | Get one book |
+| POST | `/api/books/create` | Administrator | Create a book |
+| PATCH | `/api/books/:id` | Administrator | Partially update a book |
+| DELETE | `/api/books/:id` | Administrator | Delete a book |
+| GET | `/api-docs` | As configured | Swagger UI |
+| GET | `/api-docs/json` | As configured | OpenAPI JSON |
 
-### Books
+No additional endpoint should be treated as required unless it is added to this document.
 
-- `GET /api/books`
-- `GET /api/books/:id`
-- `POST /api/books/create`
-- `PATCH /api/books/:id`
-- `DELETE /api/books/:id`
+## 6. Architecture and code organization
 
-### API Documentation
+Use a clear separation of responsibilities:
 
-- `GET /api-docs`
-- `GET /api-docs/json`
+- **Routes:** declare endpoints and attach middleware in the correct order.
+- **Controllers:** translate HTTP requests into application calls and format HTTP responses. Controllers should remain thin.
+- **Services:** contain business/use-case logic, coordinate models and other services, and enforce application-level rules. Services should not depend on Express request/response objects.
+- **Models:** define Mongoose schemas, indexes, and persistence-level behavior.
+- **Validations:** define Zod schemas for request input.
+- **Middlewares:** authentication, authorization, validation, not-found, and error handling.
+- **Database/config:** connection setup and environment configuration.
+- **Utils:** small shared helpers with a clear purpose; avoid turning this folder into a dumping ground.
+- **Tests:** unit and integration tests organized around the behavior under test.
+- **Docs:** API documentation and project-level technical notes.
 
-## 6. Security Requirements
+Expected request flow:
 
-- Hash passwords using bcrypt.
-- Use JWT access and refresh tokens.
-- Keep secrets in environment variables.
-- Protect private endpoints with authentication middleware.
-- Restrict write operations to administrators.
-- Validate all incoming user input.
-- Avoid exposing passwords and sensitive token data in API responses.
-- Safely handle user-provided search expressions.
+`request → route → middleware (auth/role/validation) → controller → service → model/database → service → controller → response`
 
-## 7. Technical Requirements
+Not every operation needs an artificial abstraction, but business logic must be moved into a service when it is reusable, non-trivial, or obscures controller responsibilities. The project must use a consistent service-layer convention rather than mixing arbitrary patterns.
 
-### Backend
+## 7. Security requirements
 
-- Node.js
-- Express.js
-- JavaScript ES Modules
+- Keep secrets and credentials in environment variables.
+- Commit an `.env.example` containing names and safe placeholders only.
+- Ensure `.env`, local database files, coverage output, and `node_modules` are excluded from Git.
+- Hash passwords with bcrypt.
+- Hash refresh tokens before persistence.
+- Never expose password or token hashes in API responses.
+- Validate and normalize input.
+- Enforce authentication and role permissions server-side.
+- Configure CORS using explicit trusted origins when credentials/cookies are used; do not combine wildcard origin with credentialed requests.
+- Use secure cookie options appropriate to the deployment environment if refresh tokens are cookie-based.
+- Avoid leaking stack traces or sensitive internal errors.
+- Apply reasonable request/body limits and security headers as part of the production-readiness review.
+- Do not log passwords, raw tokens, or secrets.
 
-### Database
+## 8. Testing strategy
 
-- MongoDB
-- Mongoose
+Use Vitest, Supertest, and mongodb-memory-server.
 
-### Validation
+### Unit tests
 
-- Zod
+- Zod create/update validation boundaries and invalid types.
+- Query parsing and cursor encode/decode behavior.
+- Search escaping and filter composition.
+- Sort allowlist and deterministic tie-breaking.
+- Service business rules and expected error cases.
+- Error mapping for application and Mongoose errors.
 
-### Authentication
-
-- JSON Web Tokens
-- bcrypt
-
-### Testing
-
-- Vitest
-- Supertest
-- mongodb-memory-server
-
-### Documentation
-
-- Swagger UI
-- swagger-jsdoc
-- OpenAPI 3.0
-
-## 8. Testing Requirements
-
-Test the following:
+### Integration tests
 
 - Health endpoint.
-- Authentication flows.
-- Authorization and role restrictions.
-- Book creation.
-- Book retrieval.
-- Book updates.
-- Book deletion.
-- Request validation.
-- Filtering and searching.
-- Sorting.
-- Pagination.
-- Error handling.
-- Database behavior.
+- Registration success and duplicate/invalid registration.
+- Login success and invalid credentials.
+- Access-token protected route behavior.
+- Missing, malformed, expired, and invalid access-token behavior.
+- Refresh success, rotation, invalid token, expired/revoked token, and replay behavior according to the chosen session policy.
+- Logout revokes the relevant session; verify that the revoked refresh token cannot be reused.
+- Regular users can read books but cannot create/update/delete them.
+- Administrators can perform permitted book writes.
+- Book create/read/update/delete success and failure cases.
+- Duplicate ISBN handling.
+- Search, each filter, combined filters, sorting, and invalid query values.
+- Cursor first page, next page, final page, empty collection, invalid cursor, invalid limit, and records sharing the same `createdAt` value.
+- Error and not-found response behavior.
+- Database test setup, cleanup, and teardown.
 
-Testing should include unit tests and integration tests where appropriate.
+### Test quality rules
 
-## 9. Performance Requirements
+- Tests must be isolated and deterministic.
+- Use a dedicated test database; never point tests at the development or production database.
+- Clear data between tests where needed.
+- Close database connections and other resources after the suite.
+- Assert meaningful response bodies and persisted database state, not only status codes.
+- Ensure the test suite does not unintentionally include `node_modules` or generated coverage output.
+- Run both the normal test command and the one-shot CI command before considering a change complete.
 
-- Avoid unnecessary database queries.
-- Use lean queries for read-only operations where appropriate.
-- Evaluate frequently used query patterns.
-- Add database indexes based on actual query requirements.
-- Use MongoDB explain plans to inspect query execution.
-- Avoid adding indexes without considering write overhead and storage costs.
+## 9. Database and performance requirements
 
-Indexing decisions must be validated against actual query patterns and execution statistics.
+- Use Mongoose models with explicit validation and timestamps.
+- Enforce unique ISBN at the database level and handle duplicate-key errors.
+- Add indexes based on actual filters, sorts, and cursor patterns.
+- For the default newest-first cursor list, evaluate a compound index compatible with `createdAt` and `_id`.
+- Avoid speculative indexes; each index has write and storage costs.
+- Use projection/lean reads where appropriate.
+- Inspect representative queries with `explain('executionStats')`.
+- Review `IXSCAN` versus `COLLSCAN`, keys examined, documents examined, and returned records.
+- Do not claim a performance improvement based only on a tiny in-memory dataset.
+- Keep index creation/management appropriate for development versus production.
 
-## 10. Acceptance Criteria
+## 10. API documentation and developer experience
 
-The project is considered complete when:
+- Maintain Swagger/OpenAPI documentation for every public route.
+- Document authentication requirements, roles, query parameters, cursor behavior, request schemas, success responses, and error responses.
+- Ensure documentation reflects the actual implementation and tests.
+- README must explain prerequisites, installation, environment variables, database setup, running the server, running tests, and opening Swagger.
+- Provide an `.env.example` without real credentials.
+- Include example requests and responses for authentication and book listing, including cursor continuation.
 
-- [ ] Authentication works correctly.
-- [ ] Refresh and logout flows work correctly.
-- [ ] Role-based authorization works.
-- [ ] All book CRUD operations work.
-- [ ] Search works correctly.
-- [ ] Filtering works correctly.
-- [ ] Multiple filters can be combined.
-- [ ] Sorting works correctly.
-- [ ] Pagination works correctly.
-- [ ] Invalid requests return appropriate errors.
-- [ ] Automated tests pass.
-- [ ] Swagger documentation accurately describes the API.
-- [ ] Environment variables and setup instructions are documented.
-- [ ] Database performance has been reviewed.
-- [ ] README explains setup, features, and API usage.
+## 11. Operational requirements
 
-## 11. Out of Scope
+- Configuration is loaded and validated at startup.
+- The application must fail clearly when required environment variables are missing or invalid.
+- Database connection failures must be reported clearly.
+- Separate application creation from server startup so tests can import the Express app without opening a production listener.
+- Provide development, production start, and test scripts.
+- Keep generated files such as coverage reports out of source control.
 
-Unless explicitly added later, this project does not include:
+Deployment to a specific cloud provider is not required in this project scope. Production-readiness checks should still be documented.
+
+## 12. Acceptance criteria
+
+The project is complete when all of the following are true:
+
+- [ ] Registration, login, refresh, and logout work according to the documented session policy.
+- [ ] Passwords and refresh tokens are stored securely.
+- [ ] Access-token authentication and role authorization work.
+- [ ] Public registration cannot grant administrator privileges.
+- [ ] Regular users can read books but cannot write them.
+- [ ] Administrators can create, update, and delete books.
+- [ ] Book schema constraints and unique ISBN behavior are enforced.
+- [ ] Search works for title and author and safely treats input as literal text.
+- [ ] Genre, author, and availability filters work independently and together.
+- [ ] Sorting accepts only supported fields and has deterministic ordering.
+- [ ] Cursor pagination follows this PRD; offset/page pagination is not mixed into the contract.
+- [ ] Zod validation covers body and query inputs.
+- [ ] Error and not-found responses are consistent.
+- [ ] Unit and integration tests cover the required success, failure, and authorization cases.
+- [ ] Tests are isolated and close their resources.
+- [ ] Swagger describes the actual API.
+- [ ] README and `.env.example` allow another developer to run the project safely.
+- [ ] Database indexes are justified by query patterns and reviewed with execution statistics.
+- [ ] No secrets, local environment files, or generated artifacts are committed.
+- [ ] The developer can explain the architecture and the important implementation decisions.
+
+## 13. Explicitly out of scope
+
+Unless separately approved and added to this PRD, this project does not include:
 
 - Frontend application.
-- Book purchasing or payment processing.
-- Online reading or ebook storage.
-- Book recommendations.
-- External book catalog integrations.
-- Social features or reviews.
-- Deployment infrastructure.
+- Shopping cart, checkout, or payments.
+- Online reading or ebook file hosting.
+- Book recommendations or personalization.
+- External book catalogue integrations.
+- Reviews, ratings, comments, or social features.
+- Inventory purchasing or shipping workflows.
+- Microservices or distributed infrastructure.
+- A production cloud deployment as a mandatory deliverable.
 
-## 12. Definition of Done
+## 14. Definition of done
 
-A feature is complete when:
+A task is done only when:
 
-1. Its requirements are understood.
-2. Its implementation follows the project architecture.
-3. Relevant validation and error handling are included.
-4. It works through the API.
-5. Appropriate tests pass.
-6. Its documentation is updated.
-7. The developer can explain how and why it works.
+1. Its requirement and expected behavior are clear.
+2. The implementation follows the agreed architecture.
+3. Validation, authorization, and error cases are handled where relevant.
+4. Relevant tests are added or updated and pass.
+5. API documentation is updated when the contract changes.
+6. The implementation has been reviewed for security and data consistency.
+7. The developer can explain the code and the reason for the design.
+
+## 15. Project workflow and change control
+
+- This PRD is the baseline for all future reviews and task assignments.
+- Work is delivered in small, prioritized tasks; do not start unrelated features while a higher-priority requirement is incomplete.
+- Before changing an agreed design (for example, pagination strategy or token transport), update this PRD and explain the trade-offs.
+- A code review must distinguish between: **bug/requirement gap**, **security risk**, **maintainability improvement**, and **optional enhancement**.
+- Do not label an intentional, documented design choice as a bug merely because it differs from a previous draft.
+- Do not introduce new dependencies or architecture layers without explaining the need and getting agreement.
+- At the start of each task, identify the relevant PRD section and acceptance criteria.
 
 ---
 
-**Project principle:** Build the API to understand backend engineering, not merely to make endpoints work.
+**Guiding principle:** Build a reliable backend that you understand deeply. Finishing the checklist matters, but being able to explain and maintain the system matters just as much.
