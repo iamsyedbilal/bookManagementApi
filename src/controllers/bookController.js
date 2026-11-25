@@ -239,3 +239,53 @@ export const getBooksWithAge = async (req, res) => {
     });
 };
 
+// GET Book Analytics
+export const getBookAnalytics = async (req, res) => {
+    const [analytics] = await Book.aggregate([
+        {
+            $facet: {
+                totalBooks: [{ $count: 'count' }],
+                booksByGenre: [
+                    {
+                        $group: {
+                            _id: '$genre',
+                            count: { $sum: 1 },
+                        },
+                    },
+                    { $sort: { count: -1, _id: 1 } },
+                    { $project: { _id: 0, genre: '$_id', count: 1 } },
+                ],
+                availabilityCounts: [
+                    {
+                        $group: {
+                            _id: '$availability',
+                            count: { $sum: 1 },
+                        },
+                    },
+                ],
+                mostRecentlyAdded: [
+                    { $sort: { createdAt: -1, _id: -1 } },
+                    { $limit: 5 },
+                ],
+            },
+        },
+    ]);
+
+    const availability = Object.fromEntries(
+        analytics.availabilityCounts.map(({ _id, count }) => [String(_id), count])
+    );
+
+    return res.status(200).json({
+        success: true,
+        data: {
+            totalBooks: analytics.totalBooks[0]?.count ?? 0,
+            booksByGenre: analytics.booksByGenre,
+            availabilityCounts: {
+                available: availability.true ?? 0,
+                unavailable: availability.false ?? 0,
+            },
+            mostRecentlyAdded: analytics.mostRecentlyAdded,
+        },
+    });
+};
+
