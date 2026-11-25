@@ -8,13 +8,19 @@ import healthRoute from './routes/healthRoute.js';
 import bookRoute from './routes/bookRoute.js';
 import userRoute from './routes/authRoute.js';
 import swaggerRoute from './docs/swagger.js';
+import { config } from './config/config.js';
 
 const app = express();
 
 app.use(
     cors({
+        origin: (origin, callback) => {
+            if (!origin || config.corsOrigin.includes(origin)) {
+                return callback(null, true);
+            }
+            return callback(null, false);
+        },
         allowedHeaders: ['Content-Type', 'Authorization'],
-        origin: '*',
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
         credentials: true,
     })

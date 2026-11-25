@@ -12,6 +12,7 @@ const _config = {
     adminName: process.env.ADMIN_NAME,
     adminEmail: process.env.ADMIN_EMAIL,
     adminPassword: process.env.ADMIN_PASSWORD,
+    corsOrigins: process.env.CORS_ORIGINS?.split(',').map((origin) => origin.trim()) ?? [],
 };
 
 export const config = Object.freeze(_config);
