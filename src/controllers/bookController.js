@@ -8,11 +8,7 @@ export const fetchAllBooks = async (req, res) => {
     const { filter, projection, options, limit } = buildBookQuery(req.query);
 
     // Build the aggregation pipeline.
-    const pipeline = [
-        { $match: filter },
-        { $sort: options.sort },
-        { $limit: options.limit },
-    ];
+    const pipeline = [{ $match: filter }, { $sort: options.sort }, { $limit: options.limit }];
 
     // Apply projection while preserving fields needed for cursor pagination.
     if (projection) {
@@ -25,10 +21,7 @@ export const fetchAllBooks = async (req, res) => {
                           .map((field) => {
                               const excluded = field.startsWith('-');
 
-                              return [
-                                  excluded ? field.slice(1) : field,
-                                  excluded ? 0 : 1,
-                              ];
+                              return [excluded ? field.slice(1) : field, excluded ? 0 : 1];
                           })
                   )
                 : { ...projection };
@@ -68,17 +61,13 @@ export const fetchAllBooks = async (req, res) => {
     return res.status(200).json({
         success: true,
         data: responseBooks,
-         pagination: {
-            totalRecords: total,
-            totalPages,
-            currentPage: page,
+        pagination: {
             limit,
-            hasPrevPage: page > 1,
-            hasNextPage: page < totalPages,
+            hasNextPage,
+            nextCursor,
         },
     });
 };
-
 
 // Create Book Controller
 export const createBookController = async (req, res) => {
@@ -138,16 +127,15 @@ export const deleteBookController = async (req, res) => {
     return res.status(200).json({ message: 'Book deleted successfully' });
 };
 
-
 // GET BOOK GENRE STATS
 export const getBookGenreStats = async (req, res) => {
     const stats = await Book.aggregate([
         {
             $group: {
-                _id: "$genre",
+                _id: '$genre',
                 totalBooks: { $sum: 1 },
                 averagePublicationYear: {
-                    $avg: "$publicationYear",
+                    $avg: '$publicationYear',
                 },
             },
         },
@@ -159,7 +147,7 @@ export const getBookGenreStats = async (req, res) => {
         {
             $project: {
                 _id: 0,
-                genre: "$_id",
+                genre: '$_id',
                 totalBooks: 1,
                 averagePublicationYear: 1,
             },
@@ -168,25 +156,24 @@ export const getBookGenreStats = async (req, res) => {
 
     return res.status(200).json({
         success: true,
-        message: "Book genre statistics fetched successfully",
+        message: 'Book genre statistics fetched successfully',
         data: stats,
     });
 };
-
 
 // GET Book With User Details
 export const getBooksWithUserDetails = async (req, res) => {
     const books = await Book.aggregate([
         {
             $lookup: {
-                from: "users",
-                localField: "addedBy",
-                foreignField: "_id",
-                as: "userDetails",
+                from: 'users',
+                localField: 'addedBy',
+                foreignField: '_id',
+                as: 'userDetails',
             },
         },
         {
-            $unwind: "$userDetails",
+            $unwind: '$userDetails',
         },
         {
             $project: {
@@ -197,9 +184,9 @@ export const getBooksWithUserDetails = async (req, res) => {
                 publicationYear: 1,
                 availability: 1,
                 addedBy: {
-                    _id: "$userDetails._id",
-                    name: "$userDetails.name",
-                    email: "$userDetails.email",
+                    _id: '$userDetails._id',
+                    name: '$userDetails.name',
+                    email: '$userDetails.email',
                 },
             },
         },
@@ -207,7 +194,7 @@ export const getBooksWithUserDetails = async (req, res) => {
 
     return res.status(200).json({
         success: true,
-        message: "Books with user details fetched successfully",
+        message: 'Books with user details fetched successfully',
         data: books,
     });
 };
@@ -218,23 +205,20 @@ export const getBooksWithAge = async (req, res) => {
         {
             $addFields: {
                 bookAge: {
-                    $subtract: [
-                        { $year: "$$NOW" },
-                        "$publicationYear",
-                    ],
+                    $subtract: [{ $year: '$$NOW' }, '$publicationYear'],
                 },
             },
         },
         {
             $set: {
-                isOldBook: { $gt: ["$bookAge", 10] },
+                isOldBook: { $gt: ['$bookAge', 10] },
             },
         },
     ]);
 
     return res.status(200).json({
         success: true,
-        message: "Book age details fetched successfully",
+        message: 'Book age details fetched successfully',
         data: books,
     });
 };
@@ -263,17 +247,12 @@ export const getBookAnalytics = async (req, res) => {
                         },
                     },
                 ],
-                mostRecentlyAdded: [
-                    { $sort: { createdAt: -1, _id: -1 } },
-                    { $limit: 5 },
-                ],
+                mostRecentlyAdded: [{ $sort: { createdAt: -1, _id: -1 } }, { $limit: 5 }],
             },
         },
     ]);
 
-    const availability = Object.fromEntries(
-        analytics.availabilityCounts.map(({ _id, count }) => [String(_id), count])
-    );
+    const availability = Object.fromEntries(analytics.availabilityCounts.map(({ _id, count }) => [String(_id), count]));
 
     return res.status(200).json({
         success: true,
@@ -288,4 +267,3 @@ export const getBookAnalytics = async (req, res) => {
         },
     });
 };
-
