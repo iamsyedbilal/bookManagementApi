@@ -49,6 +49,8 @@ describe('Book API integration', () => {
         return request(app)[method](path).set('Authorization', `Bearer ${accessToken}`);
     };
 
+    const createBook = (book = validBook) => Book.create({ ...book, addedBy: adminId });
+
     it('creates a book successfully', async () => {
         const response = await authorizedRequest('post', '/api/books/create').send(validBook);
 
@@ -61,11 +63,12 @@ describe('Book API integration', () => {
 
         expect(savedBook).not.toBeNull();
         expect(savedBook.title).toBe(validBook.title);
+        expect(savedBook.addedBy.toString()).toBe(adminId.toString());
     });
 
     it('fetches all books successfully', async () => {
         await Book.insertMany([
-            { ...validBook, title: 'Book One', ISBN: '978-0743273565' },
+            { ...validBook, title: 'Book One', ISBN: '978-0743273565', addedBy: adminId },
             {
                 ...validBook,
                 title: 'Book Two',
@@ -73,6 +76,7 @@ describe('Book API integration', () => {
                 author: 'George Orwell',
                 publicationYear: 1949,
                 genre: 'Fiction',
+                addedBy: adminId,
             },
         ]);
 
@@ -214,7 +218,7 @@ describe('Book API integration', () => {
     });
 
     it('fetches a single book successfully', async () => {
-        const createdBook = await Book.create(validBook);
+        const createdBook = await createBook();
 
         const response = await authorizedRequest('get', `/api/books/${createdBook._id}`);
 
@@ -233,7 +237,7 @@ describe('Book API integration', () => {
     });
 
     it('returns 404 when fetching a book after it has been deleted', async () => {
-        const createdBook = await Book.create(validBook);
+        const createdBook = await createBook();
 
         await Book.findByIdAndDelete(createdBook._id);
 
@@ -249,7 +253,7 @@ describe('Book API integration', () => {
     });
 
     it('updates a book successfully with PATCH', async () => {
-        const createdBook = await Book.create(validBook);
+        const createdBook = await createBook();
         const updatedTitle = 'The Great Gatsby — Updated';
 
         const response = await authorizedRequest('patch', `/api/books/${createdBook._id}`).send({
@@ -283,7 +287,7 @@ describe('Book API integration', () => {
     });
 
     it('returns 400 when PATCHing with an empty update', async () => {
-        const createdBook = await Book.create(validBook);
+        const createdBook = await createBook();
 
         const response = await authorizedRequest('patch', `/api/books/${createdBook._id}`).send({});
 
@@ -291,7 +295,7 @@ describe('Book API integration', () => {
     });
 
     it('deletes a book successfully', async () => {
-        const createdBook = await Book.create(validBook);
+        const createdBook = await createBook();
 
         const response = await authorizedRequest('delete', `/api/books/${createdBook._id}`);
 

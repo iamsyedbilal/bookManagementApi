@@ -71,7 +71,7 @@ export const fetchAllBooks = async (req, res) => {
 
 // Create Book Controller
 export const createBookController = async (req, res) => {
-    const newBook = await Book.create(req.body);
+    const newBook = await Book.create({ ...req.body, addedBy: req.user._id });
 
     return res.status(201).json(newBook);
 };
