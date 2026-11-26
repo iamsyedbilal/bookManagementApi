@@ -21,7 +21,7 @@ const router = express.Router();
 router.get('/stats/genres', verifyJWT, getBookGenreStats);
 router.get('/with-user-details', verifyJWT, getBooksWithUserDetails);
 router.get('/with-age', verifyJWT, getBooksWithAge);
-router.get('/getBookAnalytics',verifyJWT,getBookAnalytics)
+router.get('/getBookAnalytics', verifyJWT, getBookAnalytics);
 
 router.route('/').get(verifyJWT, fetchAllBooks);
 router

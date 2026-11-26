@@ -1,47 +1,61 @@
 import { describe, it, expect } from 'vitest';
+import mongoose from 'mongoose';
 import { buildBookQuery } from '../utils/bookQuery.js';
 import ApiError from '../utils/ApiError.js';
 
 describe('buildBookQuery', () => {
-    // 1. Default pagination
-    describe('1. Default pagination', () => {
-        it('returns default pagination, empty filter, and default sort when query is empty', () => {
+    // 1. Cursor pagination
+    describe('1. Cursor pagination', () => {
+        it('returns the default limit, projection, and stable sort when query is empty', () => {
             const result = buildBookQuery({});
 
             expect(result).toEqual({
                 filter: {},
+                projection: {
+                    _id: 1,
+                    title: 1,
+                    author: 1,
+                    ISBN: 1,
+                    publicationYear: 1,
+                    genre: 1,
+                    availability: 1,
+                    createdAt: 1,
+                },
                 options: {
                     sort: { createdAt: -1, _id: -1 },
-                    skip: 0,
-                    limit: 10,
-                    lean: true,
+                    limit: 11,
                 },
-                page: 1,
+                limit: 10,
             });
         });
-    });
 
-    // 2. Custom page and limit
-    describe('2. Custom page and limit', () => {
-        it('calculates skip and limit accurately for valid page and limit strings', () => {
-            const result = buildBookQuery({ page: '3', limit: '25' });
+        it('requests one extra record to determine whether another page exists', () => {
+            const result = buildBookQuery({ limit: '25' });
 
-            expect(result.page).toBe(3);
-            expect(result.options.limit).toBe(25);
-            expect(result.options.skip).toBe(50);
+            expect(result.limit).toBe(25);
+            expect(result.options.limit).toBe(26);
         });
 
-        it('accepts the minimum page value', () => {
-            const result = buildBookQuery({ page: '1' });
+        it('adds a cursor filter using createdAt and _id for stable continuation', () => {
+            const cursor = Buffer.from(
+                JSON.stringify({ createdAt: '2024-01-02T03:04:05.000Z', id: '507f1f77bcf86cd799439011' })
+            ).toString('base64url');
+            const result = buildBookQuery({ cursor });
 
-            expect(result.page).toBe(1);
-            expect(result.options.skip).toBe(0);
-        });
-
-        it('accepts the maximum limit value', () => {
-            const result = buildBookQuery({ limit: '100' });
-
-            expect(result.options.limit).toBe(100);
+            expect(result.filter.$and).toEqual([
+                {
+                    $or: [
+                        { createdAt: { $lt: new Date('2024-01-02T03:04:05.000Z') } },
+                        {
+                            createdAt: new Date('2024-01-02T03:04:05.000Z'),
+                            _id: expect.any(Object),
+                        },
+                    ],
+                },
+            ]);
+            expect(result.filter.$and[0].$or[1]._id.$lt).toEqual(
+                new mongoose.Types.ObjectId('507f1f77bcf86cd799439011')
+            );
         });
     });
 
@@ -113,27 +127,12 @@ describe('buildBookQuery', () => {
         });
     });
 
-    // 7. Sorting ascending and descending
-    describe('7. Sorting ascending and descending', () => {
-        it('defaults to ascending when sortBy is provided without order', () => {
-            const result = buildBookQuery({ sortBy: 'title' });
-            expect(result.options.sort).toEqual({ title: 1, _id: 1 });
-        });
+    // 7. Stable sorting
+    describe('7. Stable sorting', () => {
+        it('keeps cursor pagination ordering fixed when sort parameters are provided', () => {
+            const result = buildBookQuery({ sortBy: 'title', sortOrder: 'asc' });
 
-        it('sorts ascending and descending using sortBy and sortOrder/order', () => {
-            const ascResult = buildBookQuery({ sortBy: 'author', sortOrder: 'ASC' });
-            const descResult = buildBookQuery({ sortBy: 'genre', order: 'desc' });
-
-            expect(ascResult.options.sort).toEqual({ author: 1, _id: 1 });
-            expect(descResult.options.sort).toEqual({ genre: -1, _id: -1 });
-        });
-
-        it('sorts ascending and descending using +/- shorthand prefixes', () => {
-            const ascResult = buildBookQuery({ sort: '+title' });
-            const descResult = buildBookQuery({ sort: '-updatedAt' });
-
-            expect(ascResult.options.sort).toEqual({ title: 1, _id: 1 });
-            expect(descResult.options.sort).toEqual({ updatedAt: -1, _id: -1 });
+            expect(result.options.sort).toEqual({ createdAt: -1, _id: -1 });
         });
     });
 
@@ -141,14 +140,11 @@ describe('buildBookQuery', () => {
     describe('8. Invalid query parameters', () => {
         const invalidCases = [
             // Pagination errors
-            { query: { page: '0' }, message: 'page must be a positive integer' },
-            { query: { page: '-2' }, message: 'page must be a positive integer' },
-            { query: { page: '1.5' }, message: 'page must be a positive integer' },
-            { query: { page: 'abc' }, message: 'page must be a positive integer' },
-            { query: { page: 2 }, message: 'page must be a positive integer' },
-            { query: { page: '99999999999999999999' }, message: 'page is out of range' },
             { query: { limit: '0' }, message: 'limit must be a positive integer' },
             { query: { limit: '101' }, message: 'limit is out of range' },
+            { query: { cursor: '' }, message: 'Invalid cursor' },
+            { query: { cursor: 'not-a-cursor' }, message: 'Invalid cursor' },
+            { query: { cursor: 123 }, message: 'Invalid cursor' },
 
             // Filter & Search errors
             { query: { genre: '   ' }, message: 'genre must be a non-empty string' },
@@ -160,10 +156,6 @@ describe('buildBookQuery', () => {
             { query: { availability: 'yes' }, message: 'availability must be true or false' },
             { query: { availability: true }, message: 'availability must be true or false' },
 
-            // Sorting errors
-            { query: { sortBy: 'password' }, message: 'Invalid sortBy field' },
-            { query: { sort: '-unknownField' }, message: 'Invalid sortBy field' },
-            { query: { sortBy: 'title', sortOrder: 'up' }, message: 'sort order must be asc or desc' },
         ];
 
         it.each(invalidCases)('rejects invalid input: %o', ({ query, message }) => {

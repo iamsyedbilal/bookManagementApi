@@ -107,7 +107,7 @@ const addCursorFilter = (filter, cursor) => {
 
 // Build the complete book query.
 export const buildBookQuery = (query) => {
-    const limit = parseQueryInteger(query.limit, 'limit');
+    const limit = parseQueryInteger(query.limit, 'limit', 10);
 
     const filter = buildBookFilter(query);
 

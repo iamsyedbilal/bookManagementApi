@@ -3,19 +3,17 @@
  * /api/books:
  *   get:
  *     summary: Fetch all books
- *     description: Retrieves books with pagination support.
+ *     description: Retrieves books using cursor-based pagination.
  *     tags:
  *       - Books
  *     parameters:
  *       - in: query
- *         name: page
+ *         name: cursor
  *         required: false
  *         schema:
- *           type: integer
- *           minimum: 1
- *           default: 1
- *         description: Page number to retrieve.
- *         example: 1
+ *           type: string
+ *         description: Cursor returned by the previous response to retrieve the next set of books.
+ *         example: eyJjcmVhdGVkQXQiOiIyMDI0LTAxLTAyVDAzOjA0OjA1LjAwMFoiLCJpZCI6IjUwN2YxZjc3YmNmODZjZDc5OTQzOTAxMSJ9
  *       - in: query
  *         name: limit
  *         required: false
@@ -198,27 +196,22 @@
  *     Pagination:
  *       type: object
  *       required:
- *         - totalRecords
- *         - totalPages
- *         - currentPage
  *         - limit
+ *         - hasNextPage
+ *         - nextCursor
  *       properties:
- *         totalRecords:
- *           type: integer
- *           description: Total number of books matching the query.
- *           example: 43
- *         totalPages:
- *           type: integer
- *           description: Total number of available pages.
- *           example: 5
- *         currentPage:
- *           type: integer
- *           description: Currently requested page.
- *           example: 1
  *         limit:
  *           type: integer
  *           description: Maximum number of books per page.
  *           example: 10
+ *         hasNextPage:
+ *           type: boolean
+ *           description: Whether another set of books is available.
+ *           example: true
+ *         nextCursor:
+ *           type: string
+ *           nullable: true
+ *           description: Cursor to request the next set of books, or null when no more results remain.
  *
  *     PaginatedBooksResponse:
  *       type: object

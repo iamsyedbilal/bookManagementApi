@@ -19,6 +19,7 @@ const validBook = {
 
 describe('Book API integration', () => {
     let accessToken;
+    let adminId;
 
     beforeAll(async () => {
         await connect();
@@ -35,6 +36,7 @@ describe('Book API integration', () => {
             role: 'admin',
         });
 
+        adminId = admin._id;
         accessToken = admin.generateAccessToken();
     });
 
@@ -89,12 +91,13 @@ describe('Book API integration', () => {
                 ...validBook,
                 title: `Book ${index + 1}`,
                 ISBN: `978-074327${String(index + 1).padStart(4, '0')}`,
+                addedBy: adminId,
             }));
 
             return Book.insertMany(books);
         };
 
-        it('defaults to page 1 and limit 10 when no query parameters are provided', async () => {
+        it('returns the first 10 books and a cursor when more results are available', async () => {
             await seedBooks(15);
 
             const response = await authorizedRequest('get', '/api/books');
@@ -102,36 +105,51 @@ describe('Book API integration', () => {
             expect(response.status).toBe(200);
             expect(response.body.data).toHaveLength(10);
             expect(response.body.pagination).toEqual({
-                totalRecords: 15,
-                totalPages: 2,
-                currentPage: 1,
                 limit: 10,
+                hasNextPage: true,
+                nextCursor: expect.any(String),
             });
         });
 
-        it('returns the correct second page when page=2 and limit=5', async () => {
+        it('continues from the cursor without repeating books', async () => {
             await seedBooks(12);
 
-            const response = await authorizedRequest('get', '/api/books?page=2&limit=5');
+            const firstPage = await authorizedRequest('get', '/api/books?limit=5');
+            const secondPage = await authorizedRequest(
+                'get',
+                `/api/books?limit=5&cursor=${encodeURIComponent(firstPage.body.pagination.nextCursor)}`
+            );
+            const thirdPage = await authorizedRequest(
+                'get',
+                `/api/books?limit=5&cursor=${encodeURIComponent(secondPage.body.pagination.nextCursor)}`
+            );
 
-            expect(response.status).toBe(200);
-            expect(response.body.data).toHaveLength(5);
-            expect(response.body.pagination).toEqual({
-                totalRecords: 12,
-                totalPages: 3,
-                currentPage: 2,
+            expect(firstPage.status).toBe(200);
+            expect(firstPage.body.data).toHaveLength(5);
+            expect(secondPage.status).toBe(200);
+            expect(secondPage.body.data).toHaveLength(5);
+            expect(secondPage.body.pagination).toEqual({
                 limit: 5,
+                hasNextPage: true,
+                nextCursor: expect.any(String),
             });
+            expect(thirdPage.status).toBe(200);
+            expect(thirdPage.body.data).toHaveLength(2);
+            expect(thirdPage.body.pagination).toEqual({
+                limit: 5,
+                hasNextPage: false,
+                nextCursor: null,
+            });
+            const allIds = [
+                ...firstPage.body.data,
+                ...secondPage.body.data,
+                ...thirdPage.body.data,
+            ].map((book) => book._id);
+            expect(new Set(allIds).size).toBe(12);
         });
 
-        it('returns 400 when page is not a valid number (page=abc)', async () => {
-            const response = await authorizedRequest('get', '/api/books?page=abc');
-
-            expect(response.status).toBe(400);
-        });
-
-        it('returns 400 when page is negative (page=-1)', async () => {
-            const response = await authorizedRequest('get', '/api/books?page=-1');
+        it('returns 400 when the cursor is invalid', async () => {
+            const response = await authorizedRequest('get', '/api/books?cursor=invalid');
 
             expect(response.status).toBe(400);
         });
@@ -148,31 +166,29 @@ describe('Book API integration', () => {
             expect(response.status).toBe(400);
         });
 
-        it('returns empty data and zero total pages when the database is empty', async () => {
+        it('returns no next cursor when the database is empty', async () => {
             const response = await authorizedRequest('get', '/api/books');
 
             expect(response.status).toBe(200);
             expect(response.body.data).toEqual([]);
             expect(response.body.pagination).toEqual({
-                totalRecords: 0,
-                totalPages: 0,
-                currentPage: 1,
                 limit: 10,
+                hasNextPage: false,
+                nextCursor: null,
             });
         });
 
-        it('returns an empty data array when requesting a page beyond available records', async () => {
-            await seedBooks(43);
+        it('returns no next cursor when the final result fits on one page', async () => {
+            await seedBooks(3);
 
-            const response = await authorizedRequest('get', '/api/books?page=100&limit=10');
+            const response = await authorizedRequest('get', '/api/books?limit=10');
 
             expect(response.status).toBe(200);
-            expect(response.body.data).toEqual([]);
+            expect(response.body.data).toHaveLength(3);
             expect(response.body.pagination).toEqual({
-                totalRecords: 43,
-                totalPages: 5,
-                currentPage: 100,
                 limit: 10,
+                hasNextPage: false,
+                nextCursor: null,
             });
         });
     });
@@ -183,10 +199,9 @@ describe('Book API integration', () => {
         expect(response.status).toBe(200);
         expect(response.body.data).toEqual([]);
         expect(response.body.pagination).toEqual({
-            totalRecords: 0,
-            totalPages: 0,
-            currentPage: 1,
             limit: 10,
+            hasNextPage: false,
+            nextCursor: null,
         });
     });
 
