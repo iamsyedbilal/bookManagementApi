@@ -129,10 +129,17 @@ describe('buildBookQuery', () => {
 
     // 7. Stable sorting
     describe('7. Stable sorting', () => {
-        it('keeps cursor pagination ordering fixed when sort parameters are provided', () => {
-            const result = buildBookQuery({ sortBy: 'title', sortOrder: 'asc' });
+        it('rejects sort parameters unsupported by cursor pagination', () => {
+            let error;
+            try {
+                buildBookQuery({ sortBy: 'title', sortOrder: 'asc' });
+            } catch (err) {
+                error = err;
+            }
 
-            expect(result.options.sort).toEqual({ createdAt: -1, _id: -1 });
+            expect(error).toBeInstanceOf(ApiError);
+            expect(error.message).toBe('Sort parameters are not supported');
+            expect(error.statusCode).toBe(400);
         });
     });
 
@@ -144,6 +151,7 @@ describe('buildBookQuery', () => {
             { query: { limit: '101' }, message: 'limit is out of range' },
             { query: { cursor: '' }, message: 'Invalid cursor' },
             { query: { cursor: 'not-a-cursor' }, message: 'Invalid cursor' },
+            { query: { cursor: Buffer.from('{invalid json').toString('base64url') }, message: 'Invalid cursor' },
             { query: { cursor: 123 }, message: 'Invalid cursor' },
 
             // Filter & Search errors

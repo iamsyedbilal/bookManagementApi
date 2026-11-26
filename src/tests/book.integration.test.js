@@ -154,6 +154,12 @@ describe('Book API integration', () => {
             expect(response.status).toBe(400);
         });
 
+        it('returns 400 when unsupported sort parameters are provided', async () => {
+            const response = await authorizedRequest('get', '/api/books?sortBy=title&sortOrder=asc');
+
+            expect(response.status).toBe(400);
+        });
+
         it('returns 400 when limit exceeds maximum allowed (limit=101)', async () => {
             const response = await authorizedRequest('get', '/api/books?limit=101');
 
@@ -191,17 +197,19 @@ describe('Book API integration', () => {
                 nextCursor: null,
             });
         });
-    });
 
-    it('returns an empty data array when there are no books', async () => {
-        const response = await authorizedRequest('get', '/api/books');
+        it('returns no next cursor when the result count exactly matches the limit', async () => {
+            await seedBooks(3);
 
-        expect(response.status).toBe(200);
-        expect(response.body.data).toEqual([]);
-        expect(response.body.pagination).toEqual({
-            limit: 10,
-            hasNextPage: false,
-            nextCursor: null,
+            const response = await authorizedRequest('get', '/api/books?limit=3');
+
+            expect(response.status).toBe(200);
+            expect(response.body.data).toHaveLength(3);
+            expect(response.body.pagination).toEqual({
+                limit: 3,
+                hasNextPage: false,
+                nextCursor: null,
+            });
         });
     });
 

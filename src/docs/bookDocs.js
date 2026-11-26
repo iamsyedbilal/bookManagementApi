@@ -3,7 +3,7 @@
  * /api/books:
  *   get:
  *     summary: Fetch all books
- *     description: Retrieves books using cursor-based pagination.
+ *     description: Retrieves books using cursor-based pagination with fixed newest-first ordering. Sort parameters are currently unsupported.
  *     tags:
  *       - Books
  *     parameters:

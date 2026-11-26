@@ -107,6 +107,10 @@ const addCursorFilter = (filter, cursor) => {
 
 // Build the complete book query.
 export const buildBookQuery = (query) => {
+    if (['sortBy', 'sortOrder', 'sort', 'order'].some((parameter) => query[parameter] !== undefined)) {
+        throw new ApiError(400, 'Sort parameters are not supported');
+    }
+
     const limit = parseQueryInteger(query.limit, 'limit', 10);
 
     const filter = buildBookFilter(query);
