@@ -1,92 +1,10 @@
 import mongoose from 'mongoose';
 import ApiError from './ApiError.js';
-
-const SORTABLE_FIELDS = ['title', 'author', 'genre', 'availability', 'createdAt', 'updatedAt'];
-const DATE_SORT_FIELDS = ['createdAt', 'updatedAt'];
-
-// Validate positive integers from query parameters.
-const parseQueryInteger = (value, name, defaultValue, max = 100) => {
-    if (value === undefined) return defaultValue;
-
-    if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) {
-        throw new ApiError(400, `${name} must be a positive integer`);
-    }
-
-    const number = Number(value);
-
-    if (!Number.isSafeInteger(number) || number > max) {
-        throw new ApiError(400, `${name} is out of range`);
-    }
-
-    return number;
-};
+import { bookQuerySchema } from '../validations/bookValidation.js';
 
 // Escape special regex characters in user input.
 const escapeRegex = (value) => {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-};
-
-// Decode and validate a cursor for the requested sort.
-const decodeCursor = (value, sortBy, sortOrder) => {
-    try {
-        const decoded = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
-        const isDateSort = DATE_SORT_FIELDS.includes(sortBy);
-        const validSortValue = isDateSort
-            ? typeof decoded.value === 'string' &&
-              !Number.isNaN(Date.parse(decoded.value)) &&
-              new Date(decoded.value).toISOString() === decoded.value
-            : sortBy === 'availability'
-              ? typeof decoded.value === 'boolean'
-              : typeof decoded.value === 'string' && decoded.value.length > 0;
-
-        if (
-            decoded.sortBy !== sortBy ||
-            decoded.sortOrder !== sortOrder ||
-            !validSortValue ||
-            typeof decoded.id !== 'string' ||
-            !mongoose.Types.ObjectId.isValid(decoded.id)
-        ) {
-            throw new Error();
-        }
-
-        return {
-            value: isDateSort ? new Date(decoded.value) : decoded.value,
-            id: new mongoose.Types.ObjectId(decoded.id),
-        };
-    } catch {
-        throw new ApiError(400, 'Invalid cursor');
-    }
-};
-
-const parseSort = (query) => {
-    if (query.sort !== undefined || query.order !== undefined) {
-        throw new ApiError(400, 'Use sortBy and sortOrder query parameters');
-    }
-
-    const sortBy = query.sortBy ?? 'createdAt';
-
-    if (typeof sortBy !== 'string' || !SORTABLE_FIELDS.includes(sortBy)) {
-        throw new ApiError(400, 'Invalid sortBy field');
-    }
-
-    if (query.sortOrder !== undefined && query.sortBy === undefined) {
-        throw new ApiError(400, 'sortOrder requires sortBy');
-    }
-
-    let sortOrder = query.sortOrder ?? (query.sortBy === undefined ? 'desc' : 'asc');
-
-    if (typeof sortOrder !== 'string' || !['asc', 'desc'].includes(sortOrder.toLowerCase())) {
-        throw new ApiError(400, 'sortOrder must be asc or desc');
-    }
-
-    sortOrder = sortOrder.toLowerCase();
-    const direction = sortOrder === 'asc' ? 1 : -1;
-
-    return {
-        sortBy,
-        sortOrder,
-        sort: { [sortBy]: direction, _id: direction },
-    };
 };
 
 // Build search and filtering conditions.
@@ -120,12 +38,7 @@ const buildBookFilter = (query) => {
         filter.$or = [{ title: { $regex: search, $options: 'i' } }, { author: { $regex: search, $options: 'i' } }];
     }
 
-    // Filter by availability.
     if (query.availability !== undefined) {
-        if (!['true', 'false'].includes(query.availability)) {
-            throw new ApiError(400, 'availability must be true or false');
-        }
-
         filter.availability = query.availability === 'true';
     }
 
@@ -135,6 +48,7 @@ const buildBookFilter = (query) => {
 // Add cursor conditions while preserving existing filters.
 const addCursorFilter = (filter, cursor, sortBy, sortOrder) => {
     const comparison = sortOrder === 'asc' ? '$gt' : '$lt';
+    const cursorId = new mongoose.Types.ObjectId(cursor.id);
 
     filter.$and = [
         ...(filter.$and ?? []),
@@ -143,7 +57,7 @@ const addCursorFilter = (filter, cursor, sortBy, sortOrder) => {
                 { [sortBy]: { [comparison]: cursor.value } },
                 {
                     [sortBy]: cursor.value,
-                    _id: { [comparison]: cursor.id },
+                    _id: { [comparison]: cursorId },
                 },
             ],
         },
@@ -152,20 +66,21 @@ const addCursorFilter = (filter, cursor, sortBy, sortOrder) => {
 
 // Build the complete book query.
 export const buildBookQuery = (query) => {
-    const { sortBy, sortOrder, sort } = parseSort(query);
-    const limit = parseQueryInteger(query.limit, 'limit', 10);
+    const result = bookQuerySchema.safeParse(query);
 
-    const filter = buildBookFilter(query);
+    if (!result.success) {
+        throw new ApiError(400, result.error.issues[0].message);
+    }
+
+    const validatedQuery = result.data;
+    const { sortBy, sortOrder, limit } = validatedQuery;
+    const direction = sortOrder === 'asc' ? 1 : -1;
+    const sort = { [sortBy]: direction, _id: direction };
+    const filter = buildBookFilter(validatedQuery);
 
     // Decode cursor only when the client provides one.
-    if (query.cursor !== undefined) {
-        if (typeof query.cursor !== 'string' || !query.cursor.trim()) {
-            throw new ApiError(400, 'Invalid cursor');
-        }
-
-        const cursor = decodeCursor(query.cursor, sortBy, sortOrder);
-
-        addCursorFilter(filter, cursor, sortBy, sortOrder);
+    if (validatedQuery.cursor !== undefined) {
+        addCursorFilter(filter, validatedQuery.cursor, sortBy, sortOrder);
     }
 
     return {

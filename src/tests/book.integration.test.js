@@ -177,6 +177,13 @@ describe('Book API integration', () => {
             expect(response.status).toBe(400);
         });
 
+        it('validates list query parameters with Zod before fetching books', async () => {
+            const response = await authorizedRequest('get', '/api/books?search=%20%20%20');
+
+            expect(response.status).toBe(400);
+            expect(response.body.error).toBe('search must be a non-empty string');
+        });
+
         it('supports sorting and returns 400 for an unsupported sort field or order', async () => {
             const validSortResponse = await authorizedRequest('get', '/api/books?sortBy=title&sortOrder=asc');
             const invalidFieldResponse = await authorizedRequest('get', '/api/books?sortBy=addedBy&sortOrder=asc');

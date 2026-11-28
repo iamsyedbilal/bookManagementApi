@@ -20,25 +20,26 @@
  *         required: false
  *         schema:
  *           type: string
- *         description: Partial, case-insensitive search across book titles and authors.
+ *         description: Non-empty trimmed text for partial, case-insensitive search across book titles and authors. Regex metacharacters are treated literally.
  *       - in: query
  *         name: genre
  *         required: false
  *         schema:
  *           type: string
- *         description: Case-insensitive exact match for a book genre.
+ *         description: Non-empty trimmed value for a case-insensitive exact match on book genre.
  *       - in: query
  *         name: author
  *         required: false
  *         schema:
  *           type: string
- *         description: Case-insensitive exact match for an author.
+ *         description: Non-empty trimmed value for a case-insensitive exact match on author.
  *       - in: query
  *         name: availability
  *         required: false
  *         schema:
- *           type: boolean
- *         description: Filter books by availability.
+ *           type: string
+ *           enum: ['true', 'false']
+ *         description: Filter books by availability using the literal string true or false.
  *       - in: query
  *         name: sortBy
  *         required: false
@@ -52,7 +53,7 @@
  *         schema:
  *           type: string
  *           enum: [asc, desc]
- *         description: Sort direction. Requires sortBy.
+ *         description: Sort direction (case-insensitive). Requires sortBy.
  *       - in: query
  *         name: limit
  *         required: false
@@ -61,7 +62,7 @@
  *           minimum: 1
  *           maximum: 100
  *           default: 10
- *         description: Number of books per page. Maximum allowed is 100.
+ *         description: Positive integer number of books per page. Must be between 1 and 100.
  *         example: 10
  *     responses:
  *       200:

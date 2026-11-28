@@ -349,7 +349,6 @@ The project is complete when all of the following are true:
 
 **Remaining acceptance gaps:**
 
-- Book query parameters are validated by a custom parser rather than Zod, so the Zod body-and-query requirement is not met.
 - Business logic remains in controllers; the service-layer convention in Section 6 is not implemented.
 - Index execution plans were checked only with synthetic in-memory data. Production-like query statistics are still required before claiming the book indexes are justified or changing them.
 - The full dependency audit still reports two moderate advisories in the development-only `nodemon`/`minimatch` dependency chain; no forced downgrade was applied.

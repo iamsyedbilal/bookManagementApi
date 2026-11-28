@@ -1,6 +1,6 @@
 import express from 'express';
 import validateMiddleware from '../middlewares/validateMiddleware.js';
-import { createBookSchema, updateBookSchema } from '../validations/bookValidation.js';
+import { bookQuerySchema, createBookSchema, updateBookSchema } from '../validations/bookValidation.js';
 import {
     createBookController,
     deleteBookController,
@@ -23,7 +23,7 @@ router.get('/with-user-details', verifyJWT, getBooksWithUserDetails);
 router.get('/with-age', verifyJWT, getBooksWithAge);
 router.get('/getBookAnalytics', verifyJWT, getBookAnalytics);
 
-router.route('/').get(verifyJWT, fetchAllBooks);
+router.route('/').get(verifyJWT, validateMiddleware(bookQuerySchema, 'query'), fetchAllBooks);
 router
     .route('/create')
     .post(verifyJWT, authorizeRoles('admin'), validateMiddleware(createBookSchema), createBookController);
