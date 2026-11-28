@@ -3,7 +3,7 @@
  * /api/books:
  *   get:
  *     summary: Fetch all books
- *     description: Retrieves books using cursor-based pagination with fixed newest-first ordering. Sort parameters are currently unsupported.
+ *     description: Retrieves books with cursor pagination. Results default to newest-first ordering; sortBy and sortOrder can select a supported ordering.
  *     tags:
  *       - Books
  *     parameters:
@@ -13,7 +13,44 @@
  *         schema:
  *           type: string
  *         description: Cursor returned by the previous response to retrieve the next set of books.
- *         example: eyJjcmVhdGVkQXQiOiIyMDI0LTAxLTAyVDAzOjA0OjA1LjAwMFoiLCJpZCI6IjUwN2YxZjc3YmNmODZjZDc5OTQzOTAxMSJ9
+ *       - in: query
+ *         name: search
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Partial, case-insensitive search across book titles and authors.
+ *       - in: query
+ *         name: genre
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Case-insensitive exact match for a book genre.
+ *       - in: query
+ *         name: author
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Case-insensitive exact match for an author.
+ *       - in: query
+ *         name: availability
+ *         required: false
+ *         schema:
+ *           type: boolean
+ *         description: Filter books by availability.
+ *       - in: query
+ *         name: sortBy
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [title, author, genre, availability, createdAt, updatedAt]
+ *         description: Field to sort by. Defaults to createdAt descending when omitted, or ascending when supplied without sortOrder.
+ *       - in: query
+ *         name: sortOrder
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *         description: Sort direction. Requires sortBy.
  *       - in: query
  *         name: limit
  *         required: false
@@ -61,6 +98,8 @@
  *               $ref: '#/components/schemas/Book'
  *       400:
  *         $ref: '#/components/responses/BadRequest'
+ *       409:
+ *         $ref: '#/components/responses/Conflict'
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *       500:
@@ -149,6 +188,8 @@
  *               $ref: '#/components/schemas/Book'
  *       400:
  *         $ref: '#/components/responses/BadRequest'
+ *       409:
+ *         $ref: '#/components/responses/Conflict'
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  *
@@ -163,6 +204,13 @@
  *
  *     NotFound:
  *       description: The requested book was not found.
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ErrorResponse'
+ *
+ *     Conflict:
+ *       description: A book with the provided ISBN already exists.
  *       content:
  *         application/json:
  *           schema:

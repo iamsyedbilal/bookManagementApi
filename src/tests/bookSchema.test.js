@@ -204,6 +204,15 @@ describe('createBookSchema - Boundary & Behavior Tests', () => {
         });
         expect(result.success).toBe(false);
     });
+
+    it('rejects unknown fields such as addedBy', () => {
+        const result = createBookSchema.safeParse({
+            ...validBook,
+            addedBy: '507f1f77bcf86cd799439011',
+        });
+
+        expect(result.success).toBe(false);
+    });
 });
 
 describe('updateBookSchema', () => {

@@ -11,10 +11,18 @@ export const errorHandlerMiddleware = (err, req, res, next) => {
     }
 
     if (err.code === 11000) {
+        const duplicateField = Object.keys(err.keyPattern ?? err.keyValue ?? {})[0];
+        const message =
+            duplicateField === 'ISBN'
+                ? 'ISBN already exists'
+                : duplicateField === 'email'
+                  ? 'Email is already registered'
+                  : 'A record with the provided unique value already exists';
+
         return res.status(409).json({
             success: false,
             statusCode: 409,
-            message: 'Email is already registered',
+            message,
         });
     }
 

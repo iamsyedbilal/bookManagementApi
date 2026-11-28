@@ -66,6 +66,20 @@ describe('Book API integration', () => {
         expect(savedBook.addedBy.toString()).toBe(adminId.toString());
     });
 
+    it('returns a consistent conflict response for a duplicate ISBN on create', async () => {
+        await createBook();
+
+        const response = await authorizedRequest('post', '/api/books/create').send({
+            ...validBook,
+            title: 'Another Book',
+            ISBN: ` ${validBook.ISBN} `,
+        });
+
+        expect(response.status).toBe(409);
+        expect(response.body.message).toBe('ISBN already exists');
+        expect(await Book.countDocuments({ ISBN: validBook.ISBN })).toBe(1);
+    });
+
     it('fetches all books successfully', async () => {
         await Book.insertMany([
             { ...validBook, title: 'Book One', ISBN: '978-0743273565', addedBy: adminId },
@@ -86,6 +100,11 @@ describe('Book API integration', () => {
         expect(Array.isArray(response.body.data)).toBe(true);
         expect(response.body.data).toHaveLength(2);
         expect(response.body.data.map((book) => book.title)).toEqual(expect.arrayContaining(['Book One', 'Book Two']));
+        expect(response.body.data[0]).toMatchObject({
+            description: validBook.description,
+            createdAt: expect.any(String),
+            updatedAt: expect.any(String),
+        });
     });
 
     describe('GET /api/books (pagination)', () => {
@@ -158,10 +177,103 @@ describe('Book API integration', () => {
             expect(response.status).toBe(400);
         });
 
-        it('returns 400 when unsupported sort parameters are provided', async () => {
-            const response = await authorizedRequest('get', '/api/books?sortBy=title&sortOrder=asc');
+        it('supports sorting and returns 400 for an unsupported sort field or order', async () => {
+            const validSortResponse = await authorizedRequest('get', '/api/books?sortBy=title&sortOrder=asc');
+            const invalidFieldResponse = await authorizedRequest('get', '/api/books?sortBy=addedBy&sortOrder=asc');
+            const invalidOrderResponse = await authorizedRequest('get', '/api/books?sortBy=title&sortOrder=up');
 
-            expect(response.status).toBe(400);
+            expect(validSortResponse.status).toBe(200);
+            expect(invalidFieldResponse.status).toBe(400);
+            expect(invalidOrderResponse.status).toBe(400);
+        });
+
+        it('sorts by title and continues over tied values using the _id tie-breaker', async () => {
+            const timestamp = new Date('2024-01-02T03:04:05.000Z');
+            await Book.insertMany([
+                {
+                    ...validBook,
+                    _id: new Types.ObjectId('507f1f77bcf86cd799439013'),
+                    title: 'Beta',
+                    ISBN: '978-0743270013',
+                    createdAt: timestamp,
+                    updatedAt: timestamp,
+                    addedBy: adminId,
+                },
+                {
+                    ...validBook,
+                    _id: new Types.ObjectId('507f1f77bcf86cd799439012'),
+                    title: 'Alpha',
+                    ISBN: '978-0743270012',
+                    createdAt: timestamp,
+                    updatedAt: timestamp,
+                    addedBy: adminId,
+                },
+                {
+                    ...validBook,
+                    _id: new Types.ObjectId('507f1f77bcf86cd799439011'),
+                    title: 'Alpha',
+                    ISBN: '978-0743270011',
+                    createdAt: timestamp,
+                    updatedAt: timestamp,
+                    addedBy: adminId,
+                },
+            ]);
+
+            const firstPage = await authorizedRequest('get', '/api/books?limit=1&sortBy=title&sortOrder=asc');
+            const secondPage = await authorizedRequest(
+                'get',
+                `/api/books?limit=1&sortBy=title&sortOrder=asc&cursor=${encodeURIComponent(firstPage.body.pagination.nextCursor)}`
+            );
+            const thirdPage = await authorizedRequest(
+                'get',
+                `/api/books?limit=1&sortBy=title&sortOrder=asc&cursor=${encodeURIComponent(secondPage.body.pagination.nextCursor)}`
+            );
+            const descending = await authorizedRequest('get', '/api/books?sortBy=title&sortOrder=desc');
+
+            expect(firstPage.body.data.map(({ title }) => title)).toEqual(['Alpha']);
+            expect(firstPage.body.data[0]._id).toBe('507f1f77bcf86cd799439011');
+            expect(secondPage.body.data[0]._id).toBe('507f1f77bcf86cd799439012');
+            expect(thirdPage.body.data.map(({ title }) => title)).toEqual(['Beta']);
+            expect(thirdPage.body.pagination).toEqual({ limit: 1, hasNextPage: false, nextCursor: null });
+            expect(descending.body.data.map(({ title }) => title)).toEqual(['Beta', 'Alpha', 'Alpha']);
+            expect(descending.body.data.slice(1).map(({ _id }) => _id)).toEqual([
+                '507f1f77bcf86cd799439012',
+                '507f1f77bcf86cd799439011',
+            ]);
+        });
+
+        it('continues default newest-first sorting across books with the same creation time', async () => {
+            const timestamp = new Date('2024-01-02T03:04:05.000Z');
+            await Book.insertMany([
+                {
+                    ...validBook,
+                    _id: new Types.ObjectId('507f1f77bcf86cd799439011'),
+                    title: 'First by ID',
+                    ISBN: '978-0743270011',
+                    createdAt: timestamp,
+                    updatedAt: timestamp,
+                    addedBy: adminId,
+                },
+                {
+                    ...validBook,
+                    _id: new Types.ObjectId('507f1f77bcf86cd799439012'),
+                    title: 'Second by ID',
+                    ISBN: '978-0743270012',
+                    createdAt: timestamp,
+                    updatedAt: timestamp,
+                    addedBy: adminId,
+                },
+            ]);
+
+            const firstPage = await authorizedRequest('get', '/api/books?limit=1');
+            const secondPage = await authorizedRequest(
+                'get',
+                `/api/books?limit=1&cursor=${encodeURIComponent(firstPage.body.pagination.nextCursor)}`
+            );
+
+            expect(firstPage.body.data.map(({ _id }) => _id)).toEqual(['507f1f77bcf86cd799439012']);
+            expect(secondPage.body.data.map(({ _id }) => _id)).toEqual(['507f1f77bcf86cd799439011']);
+            expect(secondPage.body.pagination).toEqual({ limit: 1, hasNextPage: false, nextCursor: null });
         });
 
         it('returns 400 when limit exceeds maximum allowed (limit=101)', async () => {
@@ -268,6 +380,23 @@ describe('Book API integration', () => {
 
         expect(savedBook.title).toBe(updatedTitle);
         expect(savedBook.author).toBe(validBook.author);
+    });
+
+    it('returns a consistent conflict response when updating to a duplicate ISBN', async () => {
+        const firstBook = await createBook();
+        const secondBook = await createBook({
+            ...validBook,
+            title: 'Another Book',
+            ISBN: '978-0451524935',
+        });
+
+        const response = await authorizedRequest('patch', `/api/books/${secondBook._id}`).send({
+            ISBN: firstBook.ISBN,
+        });
+
+        expect(response.status).toBe(409);
+        expect(response.body.message).toBe('ISBN already exists');
+        expect((await Book.findById(secondBook._id)).ISBN).toBe('978-0451524935');
     });
 
     it('returns 404 when PATCHing a book that does not exist', async () => {

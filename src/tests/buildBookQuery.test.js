@@ -16,16 +16,20 @@ describe('buildBookQuery', () => {
                     title: 1,
                     author: 1,
                     ISBN: 1,
+                    description: 1,
                     publicationYear: 1,
                     genre: 1,
                     availability: 1,
                     createdAt: 1,
+                    updatedAt: 1,
                 },
                 options: {
                     sort: { createdAt: -1, _id: -1 },
                     limit: 11,
                 },
                 limit: 10,
+                sortBy: 'createdAt',
+                sortOrder: 'desc',
             });
         });
 
@@ -38,7 +42,12 @@ describe('buildBookQuery', () => {
 
         it('adds a cursor filter using createdAt and _id for stable continuation', () => {
             const cursor = Buffer.from(
-                JSON.stringify({ createdAt: '2024-01-02T03:04:05.000Z', id: '507f1f77bcf86cd799439011' })
+                JSON.stringify({
+                    sortBy: 'createdAt',
+                    sortOrder: 'desc',
+                    value: '2024-01-02T03:04:05.000Z',
+                    id: '507f1f77bcf86cd799439011',
+                })
             ).toString('base64url');
             const result = buildBookQuery({ cursor });
 
@@ -48,7 +57,7 @@ describe('buildBookQuery', () => {
                         { createdAt: { $lt: new Date('2024-01-02T03:04:05.000Z') } },
                         {
                             createdAt: new Date('2024-01-02T03:04:05.000Z'),
-                            _id: expect.any(Object),
+                            _id: { $lt: expect.any(Object) },
                         },
                     ],
                 },
@@ -56,6 +65,28 @@ describe('buildBookQuery', () => {
             expect(result.filter.$and[0].$or[1]._id.$lt).toEqual(
                 new mongoose.Types.ObjectId('507f1f77bcf86cd799439011')
             );
+        });
+
+        it('adds a cursor filter using the requested sort field and direction', () => {
+            const cursor = Buffer.from(
+                JSON.stringify({
+                    sortBy: 'title',
+                    sortOrder: 'asc',
+                    value: 'Alpha',
+                    id: '507f1f77bcf86cd799439011',
+                })
+            ).toString('base64url');
+            const result = buildBookQuery({ cursor, sortBy: 'title', sortOrder: 'asc' });
+
+            expect(result.filter.$and[0]).toEqual({
+                $or: [
+                    { title: { $gt: 'Alpha' } },
+                    {
+                        title: 'Alpha',
+                        _id: { $gt: new mongoose.Types.ObjectId('507f1f77bcf86cd799439011') },
+                    },
+                ],
+            });
         });
     });
 
@@ -129,17 +160,22 @@ describe('buildBookQuery', () => {
 
     // 7. Stable sorting
     describe('7. Stable sorting', () => {
-        it('rejects sort parameters unsupported by cursor pagination', () => {
-            let error;
-            try {
-                buildBookQuery({ sortBy: 'title', sortOrder: 'asc' });
-            } catch (err) {
-                error = err;
-            }
+        it.each(['title', 'author', 'genre', 'availability', 'createdAt', 'updatedAt'])(
+            'sorts by %s ascending with an _id tie-breaker',
+            (sortBy) => {
+                const result = buildBookQuery({ sortBy });
 
-            expect(error).toBeInstanceOf(ApiError);
-            expect(error.message).toBe('Sort parameters are not supported');
-            expect(error.statusCode).toBe(400);
+                expect(result.options.sort).toEqual({ [sortBy]: 1, _id: 1 });
+                expect(result.sortBy).toBe(sortBy);
+                expect(result.sortOrder).toBe('asc');
+            }
+        );
+
+        it('supports descending order', () => {
+            const result = buildBookQuery({ sortBy: 'author', sortOrder: 'DESC' });
+
+            expect(result.options.sort).toEqual({ author: -1, _id: -1 });
+            expect(result.sortOrder).toBe('desc');
         });
     });
 
@@ -152,7 +188,23 @@ describe('buildBookQuery', () => {
             { query: { cursor: '' }, message: 'Invalid cursor' },
             { query: { cursor: 'not-a-cursor' }, message: 'Invalid cursor' },
             { query: { cursor: Buffer.from('{invalid json').toString('base64url') }, message: 'Invalid cursor' },
+            {
+                query: {
+                    cursor: Buffer.from(
+                        JSON.stringify({
+                            sortBy: 'createdAt',
+                            sortOrder: 'desc',
+                            value: 'not-a-date',
+                            id: '507f1f77bcf86cd799439011',
+                        })
+                    ).toString('base64url'),
+                },
+                message: 'Invalid cursor',
+            },
             { query: { cursor: 123 }, message: 'Invalid cursor' },
+            { query: { sortBy: 'unknown' }, message: 'Invalid sortBy field' },
+            { query: { sortOrder: 'asc' }, message: 'sortOrder requires sortBy' },
+            { query: { sortBy: 'title', sortOrder: 'up' }, message: 'sortOrder must be asc or desc' },
 
             // Filter & Search errors
             { query: { genre: '   ' }, message: 'genre must be a non-empty string' },

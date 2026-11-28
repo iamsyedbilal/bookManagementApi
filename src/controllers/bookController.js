@@ -5,7 +5,7 @@ import { buildBookQuery } from '../utils/bookQuery.js';
 
 // Fetch All Books
 export const fetchAllBooks = async (req, res) => {
-    const { filter, projection, options, limit } = buildBookQuery(req.query);
+    const { filter, projection, options, limit, sortBy, sortOrder } = buildBookQuery(req.query);
 
     // Build the aggregation pipeline.
     const pipeline = [{ $match: filter }, { $sort: options.sort }, { $limit: options.limit }];
@@ -29,6 +29,7 @@ export const fetchAllBooks = async (req, res) => {
         // Cursor generation requires these fields.
         aggregateProjection._id = 1;
         aggregateProjection.createdAt = 1;
+        aggregateProjection[sortBy] = 1;
 
         pipeline.push({ $project: aggregateProjection });
     }
@@ -49,18 +50,17 @@ export const fetchAllBooks = async (req, res) => {
         hasNextPage && lastBook
             ? Buffer.from(
                   JSON.stringify({
-                      createdAt: lastBook.createdAt.toISOString(),
-                      id: lastBook._id.toString(),
+                          sortBy,
+                          sortOrder,
+                          value: lastBook[sortBy],
+                          id: lastBook._id.toString(),
                   })
               ).toString('base64url')
             : null;
 
-    // Remove the internal field from the public response.
-    const responseBooks = books.map(({ createdAt, ...book }) => book);
-
     return res.status(200).json({
         success: true,
-        data: responseBooks,
+        data: books,
         pagination: {
             limit,
             hasNextPage,

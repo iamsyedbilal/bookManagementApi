@@ -37,7 +37,7 @@ export const createBookSchema = z.object({
         .max(new Date().getFullYear(), 'Publication year cannot be in the future'),
     genre: z.enum(GENRES, { error: 'Genre is required' }),
     availability: z.boolean().default(true),
-});
+}).strict();
 
 // Update Book Validation Schema
 export const updateBookSchema = createBookSchema
