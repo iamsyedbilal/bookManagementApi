@@ -9,6 +9,6 @@ connectDB()
         });
     })
     .catch((err) => {
-        console.log(`Error while connecting to the database & server ${err}`);
+        console.error('Database connection failed; server was not started.', err instanceof Error ? err.name : 'Unknown error');
         process.exit(1);
     });

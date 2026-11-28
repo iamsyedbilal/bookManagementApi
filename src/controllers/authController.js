@@ -5,6 +5,23 @@ import hashToken from '../utils/hashToken.js';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/config.js';
 import { refreshCookieOptions } from '../utils/cookieOptions.js';
+import { randomUUID } from 'crypto';
+
+const revokeRefreshTokenFamily = async (familyId, revokedAt) => {
+    await RefreshToken.updateMany({ familyId, revokedAt: null }, { $set: { revokedAt } });
+};
+
+const revokeFamilyOnReplay = async (tokenHash, revokedAt) => {
+    const replayedToken = await RefreshToken.findOne({
+        tokenHash,
+        revokedAt: { $ne: null },
+        expiresAt: { $gt: revokedAt },
+    });
+
+    if (replayedToken?.familyId) {
+        await revokeRefreshTokenFamily(replayedToken.familyId, revokedAt);
+    }
+};
 
 // Register User
 export const register = async (req, res) => {
@@ -63,6 +80,7 @@ export const login = async (req, res) => {
     await RefreshToken.create({
         user: existingUser._id,
         tokenHash,
+        familyId: randomUUID(),
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     });
 
@@ -99,13 +117,15 @@ export const refresh = async (req, res) => {
     }
 
     const tokenHash = hashToken(token);
+    const now = new Date();
     const tokenRecord = await RefreshToken.findOne({
         tokenHash,
-        expiresAt: { $gt: new Date() },
+        expiresAt: { $gt: now },
         revokedAt: null,
     });
 
     if (!tokenRecord) {
+        await revokeFamilyOnReplay(tokenHash, now);
         throw new ApiError(401, 'Invalid or expired refresh token');
     }
 
@@ -115,32 +135,35 @@ export const refresh = async (req, res) => {
         throw new ApiError(401, 'Invalid or expired refresh token');
     }
 
-    // Atomically consume the old session to prevent refresh-token reuse.
+    const familyId = tokenRecord.familyId ?? randomUUID();
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
+    const nextTokenRecord = await RefreshToken.create({
+        user: user._id,
+        tokenHash: hashToken(refreshToken),
+        familyId,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+
+    // Persist the successor before consuming the token so concurrent replays can revoke it too.
     const revokedToken = await RefreshToken.findOneAndUpdate(
         {
             _id: tokenRecord._id,
             tokenHash,
-            expiresAt: { $gt: new Date() },
+            expiresAt: { $gt: now },
             revokedAt: null,
         },
         {
-            $set: { revokedAt: new Date() },
+            $set: { revokedAt: now, familyId },
         },
-        { new: true }
+        { returnDocument: 'after' }
     );
 
     if (!revokedToken) {
+        await RefreshToken.updateOne({ _id: nextTokenRecord._id, revokedAt: null }, { $set: { revokedAt: now } });
+        await revokeFamilyOnReplay(tokenHash, now);
         throw new ApiError(401, 'Invalid or expired refresh token');
     }
-
-    const accessToken = user.generateAccessToken();
-    const refreshToken = user.generateRefreshToken();
-
-    await RefreshToken.create({
-        user: user._id,
-        tokenHash: hashToken(refreshToken),
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    });
 
     res.cookie('refreshToken', refreshToken, refreshCookieOptions);
 

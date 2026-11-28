@@ -1,6 +1,7 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
+import helmet from 'helmet';
 import { errorHandlerMiddleware } from './middlewares/errorMiddleware.js';
 import { notFoundMiddleware } from './middlewares/notFoundMiddleware.js';
 // Routes Imports
@@ -12,6 +13,17 @@ import { config } from './config/config.js';
 
 const app = express();
 
+app.disable('x-powered-by');
+app.use(
+    helmet({
+        contentSecurityPolicy: {
+            directives: {
+                ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+                'upgrade-insecure-requests': config.env === 'production' ? [] : null,
+            },
+        },
+    })
+);
 app.use(
     cors({
         origin: (origin, callback) => {

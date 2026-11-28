@@ -5,6 +5,10 @@ import mongoose from 'mongoose';
 
 const seedAdmin = async () => {
     try {
+        if (!config.adminName || !config.adminEmail || !config.adminPassword) {
+            throw new Error('Set ADMIN_NAME, ADMIN_EMAIL, and ADMIN_PASSWORD before running the admin seed script.');
+        }
+
         await connectDB();
 
         const adminEmail = config.adminEmail;
@@ -24,11 +28,17 @@ const seedAdmin = async () => {
 
         console.log(`Admin created successfully: ${adminUser.email}`);
     } catch (error) {
-        console.error('Error seeding admin:', error);
+        const message =
+            error instanceof Error && error.message.startsWith('Set ADMIN_NAME')
+                ? error.message
+                : `Admin seeding failed (${error instanceof Error ? error.name : 'Unknown error'}). Check database connectivity and admin settings.`;
+        console.error(message);
         process.exitCode = 1;
     } finally {
-        await mongoose.connection.close();
-        console.log('Database connection closed.');
+        if (mongoose.connection.readyState !== 0) {
+            await mongoose.connection.close();
+            console.log('Database connection closed.');
+        }
     }
 };
 

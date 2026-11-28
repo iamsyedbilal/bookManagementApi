@@ -129,7 +129,43 @@ describe('Book API authentication integration', () => {
 
             expect(reuseResponse.status).toBe(401);
             expect(reuseResponse.body.message).toBe('Invalid or expired refresh token');
-            expect(await RefreshToken.countDocuments({ user: adminId, revokedAt: null })).toBe(1);
+            expect(await RefreshToken.countDocuments({ user: adminId, revokedAt: null })).toBe(0);
+        });
+
+        it('revokes only the replayed token family, preserving other sessions', async () => {
+            const firstLogin = await request(app).post('/api/auth/login').send(adminCredentials);
+            const otherSessionLogin = await request(app).post('/api/auth/login').send(adminCredentials);
+            const originalCookie = getRefreshCookie(firstLogin);
+            const otherSessionCookie = getRefreshCookie(otherSessionLogin);
+            const rotation = await request(app).post('/api/auth/refresh').set('Cookie', originalCookie);
+            const rotatedCookie = getRefreshCookie(rotation);
+
+            const replay = await request(app).post('/api/auth/refresh').set('Cookie', originalCookie);
+            const revokedFamilyRefresh = await request(app).post('/api/auth/refresh').set('Cookie', rotatedCookie);
+            const otherSessionRefresh = await request(app).post('/api/auth/refresh').set('Cookie', otherSessionCookie);
+
+            expect(replay.status).toBe(401);
+            expect(revokedFamilyRefresh.status).toBe(401);
+            expect(otherSessionRefresh.status).toBe(200);
+        });
+
+        it('revokes a token family when refresh requests race on the same token', async () => {
+            const loginResponse = await request(app).post('/api/auth/login').send(adminCredentials);
+            const oldCookie = getRefreshCookie(loginResponse);
+            const concurrentResponses = await Promise.all([
+                request(app).post('/api/auth/refresh').set('Cookie', oldCookie),
+                request(app).post('/api/auth/refresh').set('Cookie', oldCookie),
+            ]);
+            const successfulRotation = concurrentResponses.find((response) => response.status === 200);
+
+            expect(concurrentResponses.map((response) => response.status).sort()).toEqual([200, 401]);
+            expect(successfulRotation).toBeDefined();
+
+            const followUpRefresh = await request(app)
+                .post('/api/auth/refresh')
+                .set('Cookie', getRefreshCookie(successfulRotation));
+
+            expect(followUpRefresh.status).toBe(401);
         });
 
         it('revokes the refresh token on logout', async () => {
@@ -149,6 +185,20 @@ describe('Book API authentication integration', () => {
 
             expect(refreshResponse.status).toBe(401);
             expect(refreshResponse.body.message).toBe('Invalid or expired refresh token');
+        });
+
+        it('documents authentication endpoints and bearer-token security in OpenAPI', async () => {
+            const response = await request(app).get('/api-docs/json');
+
+            expect(response.status).toBe(200);
+            expect(response.body.paths['/api/auth/register'].post).toBeDefined();
+            expect(response.body.paths['/api/auth/login'].post).toBeDefined();
+            expect(response.body.paths['/api/auth/refresh'].post).toBeDefined();
+            expect(response.body.paths['/api/auth/logout'].post.security).toEqual([{ bearerAuth: [] }]);
+            expect(response.body.components.securitySchemes.bearerAuth.type).toBe('http');
+            expect(response.body.paths['/api/books'].get.security).toEqual([{ bearerAuth: [] }]);
+            expect(response.body.paths['/api/books/{id}'].patch.responses['403']).toBeDefined();
+            expect(response.body.paths['/api/books/create'].post.responses['403']).toBeDefined();
         });
     });
 

@@ -50,6 +50,8 @@ Authorization must be enforced on the server for every protected write operation
 
 The project must define how the first administrator is created and how later users can or cannot become administrators. Do not allow a public registration request to assign an arbitrary privileged role. The chosen provisioning method must be documented and tested before release.
 
+**Chosen policy:** Public registration creates regular users only and rejects unknown fields, including `role`. An operator provisions the initial or additional administrator by setting `ADMIN_NAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` and running `scripts/seedAdmin.js`. This path is not exposed as an API endpoint.
+
 ## 4. Functional requirements
 
 ### 4.1 Authentication and sessions
@@ -71,6 +73,8 @@ Required capabilities:
 Required failure behavior includes invalid credentials, missing/invalid/expired access tokens, invalid/revoked refresh tokens, and insufficient role permissions.
 
 Cookie transport, token expiry values, refresh-token reuse handling, and multi-device session policy must be made explicit in configuration/documentation and covered by tests. Do not silently assume a policy that has not been agreed.
+
+**Chosen refresh-token policy:** Each successful login starts an independent token family. Rotation consumes the presented token and issues a new refresh token in that family. Reuse of a still-valid rotated token revokes every active refresh token in that family; other login families for the same user remain valid. Logout revokes the refresh token supplied with the authenticated request. Refresh tokens are HttpOnly cookies scoped to `/api/auth`, use `SameSite=Lax`, are `Secure` in production, and expire after seven days. Access tokens expire after 15 minutes.
 
 ### 4.2 Book data model
 
@@ -290,6 +294,8 @@ Use Vitest, Supertest, and mongodb-memory-server.
 - Do not claim a performance improvement based only on a tiny in-memory dataset.
 - Keep index creation/management appropriate for development versus production.
 
+**Index review (2026-11-28):** The unique ISBN and user email indexes enforce required uniqueness. The book `{createdAt: -1, _id: -1}` index matches the default cursor sort and recent-book analytics. The `{title: 1}`, `{author: 1}`, and `{genre: 1, author: 1}` indexes do not reliably support the current case-insensitive regular-expression search/filter predicates; retain them provisionally, but do not claim these queries are indexed without representative execution plans. A spot check against 2,000 synthetic in-memory books used the default sort index (11 keys/documents examined for 11 results); the case-insensitive filter examined all 2,000 documents, while partial search examined 99 to return 11 using the sort index. These synthetic results are diagnostic only and are not performance claims. The refresh-token hash unique index supports token lookup; `{familyId: 1, revokedAt: 1}` supports replay revocation, and the `expiresAt` TTL index removes expired sessions. Revisit the book indexes with representative production-like data before adding composites or removing indexes.
+
 ## 10. API documentation and developer experience
 
 - Maintain Swagger/OpenAPI documentation for every public route.
@@ -334,6 +340,20 @@ The project is complete when all of the following are true:
 - [ ] Database indexes are justified by query patterns and reviewed with execution statistics.
 - [ ] No secrets, local environment files, or generated artifacts are committed.
 - [ ] The developer can explain the architecture and the important implementation decisions.
+
+### Final acceptance review (2026-11-28)
+
+**Outcome: Partial acceptance; the project is not yet complete against this PRD.** The listed authentication, documentation, environment, CORS/security-header, and index-review work is implemented. Both full test commands passed with 150 tests.
+
+**Verified:** Refresh rotation/replay/logout follow the documented per-login-family policy; public registration rejects privileged role assignment; authentication Swagger docs describe cookies and bearer auth; README and `.env.example` cover local setup; required runtime configuration is validated before database startup; CORS uses exact configured origins with credentials and standard security headers; production dependencies pass `npm audit --omit=dev`.
+
+**Remaining acceptance gaps:**
+
+- Book query parameters are validated by a custom parser rather than Zod, so the Zod body-and-query requirement is not met.
+- Business logic remains in controllers; the service-layer convention in Section 6 is not implemented.
+- Index execution plans were checked only with synthetic in-memory data. Production-like query statistics are still required before claiming the book indexes are justified or changing them.
+- The full dependency audit still reports two moderate advisories in the development-only `nodemon`/`minimatch` dependency chain; no forced downgrade was applied.
+- Administrator provisioning is documented and public role escalation is tested, but the seed script's success/idempotence path lacks an automated integration test.
 
 ## 13. Explicitly out of scope
 

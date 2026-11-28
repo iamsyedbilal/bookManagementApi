@@ -6,6 +6,8 @@
  *     description: Retrieves books with cursor pagination. Results default to newest-first ordering; sortBy and sortOrder can select a supported ordering.
  *     tags:
  *       - Books
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: cursor
@@ -68,6 +70,8 @@
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/PaginatedBooksResponse'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  *       500:
@@ -82,6 +86,8 @@
  *     description: Retrieves a single book using its MongoDB ObjectId.
  *     tags:
  *       - Books
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -96,10 +102,10 @@
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Book'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
  *       400:
  *         $ref: '#/components/responses/BadRequest'
- *       409:
- *         $ref: '#/components/responses/Conflict'
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *       500:
@@ -107,9 +113,11 @@
  *
  *   patch:
  *     summary: Update a book
- *     description: Updates specific fields of an existing book.
+ *     description: Updates specific fields of an existing book. Administrator access is required.
  *     tags:
  *       - Books
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -130,6 +138,10 @@
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Book'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  *       404:
@@ -139,9 +151,11 @@
  *
  *   delete:
  *     summary: Delete a book
- *     description: Permanently deletes a book from the database.
+ *     description: Permanently deletes a book from the database. Administrator access is required.
  *     tags:
  *       - Books
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -160,6 +174,10 @@
  *                 message:
  *                   type: string
  *                   example: Book deleted successfully
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  *       404:
@@ -170,9 +188,11 @@
  * /api/books/create:
  *   post:
  *     summary: Create a new book
- *     description: Validates and creates a new book.
+ *     description: Validates and creates a new book. Administrator access is required.
  *     tags:
  *       - Books
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -186,6 +206,10 @@
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Book'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
  *       400:
  *         $ref: '#/components/responses/BadRequest'
  *       409:
