@@ -5,7 +5,7 @@ import { buildBookQuery } from '../utils/bookQuery.js';
 
 // Fetch All Books
 export const fetchAllBooks = async (req, res) => {
-    const { filter, projection, options, limit, sortBy, sortOrder } = buildBookQuery(req.validatedQuery);
+    const { filter, projection, options, limit, sortBy, sortOrder } = buildBookQuery(req.validatedQuery, true);
 
     // Build the aggregation pipeline.
     const pipeline = [{ $match: filter }, { $sort: options.sort }, { $limit: options.limit }];

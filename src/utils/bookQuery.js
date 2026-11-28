@@ -65,14 +65,18 @@ const addCursorFilter = (filter, cursor, sortBy, sortOrder) => {
 };
 
 // Build the complete book query.
-export const buildBookQuery = (query) => {
-    const result = bookQuerySchema.safeParse(query);
+export const buildBookQuery = (query, alreadyValidated = false) => {
+    let validatedQuery = query;
 
-    if (!result.success) {
-        throw new ApiError(400, result.error.issues[0].message);
+    if (!alreadyValidated) {
+        const result = bookQuerySchema.safeParse(query);
+
+        if (!result.success) {
+            throw new ApiError(400, result.error.issues[0].message);
+        }
+
+        validatedQuery = result.data;
     }
-
-    const validatedQuery = result.data;
     const { sortBy, sortOrder, limit } = validatedQuery;
     const direction = sortOrder === 'asc' ? 1 : -1;
     const sort = { [sortBy]: direction, _id: direction };
